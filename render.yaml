@@ -1,0 +1,22 @@
+services:
+  - type: web_service
+    project: Dcon-backend
+    name: Dcon-backend
+    env: node
+    plan: free
+    region: oregon
+    branch: main
+    rootDir: backend
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: SUPABASE_URL
+        value: ""
+      - key: SUPABASE_ANON_KEY
+        value: ""
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        value: ""
+      - key: FRONTEND_URL
+        value: "https://dcons.netlify.app"
+      - key: PORT
+        value: "4000"
