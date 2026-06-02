@@ -16,7 +16,7 @@ import type {
   RouterRtpCodecCapability,
 } from 'mediasoup/types';
 import dotenv from 'dotenv';
-import { supabaseAdmin, verifySupabaseToken, getUserRole } from './lib/supabaseClient';
+import { supabaseAdmin, verifySupabaseToken, getUserRole } from './lib/supabaseClient.js';
 
 dotenv.config();
 
@@ -324,6 +324,24 @@ io.on('connection', (socket) => {
 
       const peerRole = userRole === 'teacher' ? 'teacher' : 'student';
       const room = await getOrCreateRoom(roomName);
+      // Enforce session access for students: only users with session_access.has_access or paid=true can join
+      if (peerRole === 'student' && userId && room.roomId) {
+        try {
+          const { data: accessRow } = await supabaseAdmin
+            .from('session_access')
+            .select('has_access, paid')
+            .eq('session_id', room.roomId)
+            .eq('user_id', userId)
+            .single();
+
+          if (!accessRow || (!(accessRow.has_access || accessRow.paid))) {
+            return callback({ error: 'Access denied: payment or enrollment required' });
+          }
+        } catch (err) {
+          console.error('Access check error:', err);
+          return callback({ error: 'Access check failed' });
+        }
+      }
       const joinedAt = new Date().toISOString();
 
       const peer: PeerInfo = {
@@ -611,6 +629,64 @@ io.on('connection', (socket) => {
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+// Check if a user (via token) has access to a named session/room
+app.get('/session/:roomName/access', async (req, res) => {
+  try {
+    const roomName = req.params.roomName;
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : (req.query.token as string) || '';
+
+    if (!token) {
+      return res.status(401).json({ allowed: false, reason: 'No token provided' });
+    }
+
+    const user = await verifySupabaseToken(token);
+    if (!user) return res.status(401).json({ allowed: false, reason: 'Invalid token' });
+
+    const userId = user.id;
+    const role = await getUserRole(userId);
+
+    // Teachers and admins always have access
+    if (role === 'teacher' || role === 'admin') {
+      return res.json({ allowed: true });
+    }
+
+    // Find session by room name
+    const { data: session, error: sessErr } = await supabaseAdmin
+      .from('classroom_sessions')
+      .select('id')
+      .eq('room_name', roomName)
+      .single();
+
+    if (sessErr || !session) {
+      return res.status(404).json({ allowed: false, reason: 'Session not found' });
+    }
+
+    const sessionId = session.id;
+
+    // Check session_access table
+    const { data: accessRow, error: accessErr } = await supabaseAdmin
+      .from('session_access')
+      .select('has_access, paid')
+      .eq('session_id', sessionId)
+      .eq('user_id', userId)
+      .single();
+
+    if (accessErr || !accessRow) {
+      return res.json({ allowed: false, reason: 'No access record' });
+    }
+
+    if (accessRow.has_access || accessRow.paid) {
+      return res.json({ allowed: true });
+    }
+
+    return res.json({ allowed: false, reason: 'Access denied' });
+  } catch (err) {
+    console.error('session access check error', err);
+    return res.status(500).json({ allowed: false, reason: 'Server error' });
+  }
 });
 
 server.listen(PORT, () => {

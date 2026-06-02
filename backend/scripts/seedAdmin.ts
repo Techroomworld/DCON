@@ -1,4 +1,4 @@
-import { supabaseAdmin } from '../lib/supabaseClient';
+import { supabaseAdmin } from '../lib/supabaseClient.js';
 import dotenv from 'dotenv';
 
 dotenv.config();

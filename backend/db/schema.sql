@@ -200,3 +200,19 @@ CREATE INDEX IF NOT EXISTS idx_assignments_room_id ON assignments(room_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_assignment_id ON submissions(assignment_id);
 CREATE INDEX IF NOT EXISTS idx_submissions_student_id ON submissions(student_id);
 CREATE INDEX IF NOT EXISTS idx_articles_created_by ON articles(created_by);
+
+-- Session Access: which users are allowed to enter a classroom (e.g., paid students)
+CREATE TABLE IF NOT EXISTS session_access (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES classroom_sessions(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  has_access BOOLEAN DEFAULT FALSE,
+  paid BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE session_access ENABLE ROW LEVEL SECURITY;
+
+-- Admins can manage session access
+CREATE POLICY session_access_manage ON session_access
+  FOR ALL USING ((SELECT role FROM users WHERE id = auth.uid()) = 'admin');
