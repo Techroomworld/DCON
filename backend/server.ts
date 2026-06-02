@@ -16,6 +16,7 @@ import type {
   RouterRtpCodecCapability,
 } from 'mediasoup/types';
 import dotenv from 'dotenv';
+import { supabaseAdmin, verifySupabaseToken, getUserRole } from './lib/supabaseClient';
 
 dotenv.config();
 
@@ -42,6 +43,7 @@ type Role = 'teacher' | 'student';
 type PeerInfo = {
   socketId: string;
   peerId: string;
+  userId: string;
   name: string;
   role: Role;
   roomName: string;
@@ -81,6 +83,7 @@ type WhiteboardSnapshot = {
 };
 
 type RoomInfo = {
+  roomId?: string;
   roomName: string;
   worker: Worker;
   router: Router;
@@ -147,7 +150,36 @@ async function getOrCreateRoom(roomName: string): Promise<RoomInfo> {
   const worker = await getWorker();
   const router = await worker.createRouter({ mediaCodecs });
 
+  // Create room in Supabase if not exists
+  let roomId = '';
+  const { data: existingRoom } = await supabaseAdmin
+    .from('classroom_sessions')
+    .select('id')
+    .eq('room_name', roomName)
+    .single();
+
+  if (existingRoom) {
+    roomId = existingRoom.id;
+  } else {
+    const { data: newRoom } = await supabaseAdmin
+      .from('classroom_sessions')
+      .insert({
+        room_name: roomName,
+        title: roomName,
+        status: 'active',
+        started_at: new Date().toISOString(),
+        teacher_id: '00000000-0000-0000-0000-000000000000', // placeholder
+      })
+      .select('id')
+      .single();
+
+    if (newRoom) {
+      roomId = newRoom.id;
+    }
+  }
+
   const room: RoomInfo = {
+    roomId,
     roomName,
     worker,
     router,
@@ -271,18 +303,33 @@ io.on('connection', (socket) => {
 
   socket.on('join-room', async (payload, callback) => {
     try {
-      const { roomName, name, role } = payload || {};
+      const { roomName, name, role, token } = payload || {};
       if (!roomName || !name) {
         return callback({ error: 'roomName and name are required' });
       }
 
-      const peerRole = role === 'teacher' ? 'teacher' : 'student';
+      // Verify Supabase token
+      let userId = '';
+      let userRole: string = role === 'teacher' ? 'teacher' : 'student';
+      
+      if (token) {
+        const user = await verifySupabaseToken(token);
+        if (!user) {
+          return callback({ error: 'Invalid or expired token' });
+        }
+        userId = user.id;
+        // Get actual role from database
+        userRole = await getUserRole(userId);
+      }
+
+      const peerRole = userRole === 'teacher' ? 'teacher' : 'student';
       const room = await getOrCreateRoom(roomName);
       const joinedAt = new Date().toISOString();
 
       const peer: PeerInfo = {
         socketId: socket.id,
         peerId: socket.data.peerId,
+        userId,
         name,
         role: peerRole,
         roomName,
@@ -294,6 +341,21 @@ io.on('connection', (socket) => {
 
       room.peers.set(socket.id, peer);
       socket.join(roomName);
+      
+      // Save attendance to Supabase
+      if (userId && room.roomId) {
+        const { error } = await supabaseAdmin
+          .from('attendance')
+          .insert({
+            room_id: room.roomId,
+            user_id: userId,
+            user_name: name,
+            user_role: peerRole,
+            joined_at: new Date().toISOString(),
+          });
+        if (error) console.error('Attendance insert error:', error);
+      }
+
       sendAttendanceUpdate(room);
 
       callback({
@@ -455,9 +517,9 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('chat:send', (payload, callback) => {
+  socket.on('chat:send', async (payload, callback) => {
     try {
-      const { roomName, sender, role, message, time } = payload || {};
+      const { roomName, sender, role, message, time, userId } = payload || {};
       const room = getRoom(roomName);
       if (!room) {
         return callback({ error: 'Room not found' });
@@ -474,6 +536,22 @@ io.on('connection', (socket) => {
       };
 
       room.chatHistory.push(chatMessage);
+      
+      // Save to Supabase
+      if (room.roomId && userId) {
+        const { error } = await supabaseAdmin
+          .from('chat_messages')
+          .insert({
+            room_id: room.roomId,
+            user_id: userId,
+            user_name: sender,
+            user_role: role,
+            message,
+            flagged: moderation.flagged,
+          });
+        if (error) console.error('Chat insert error:', error);
+      }
+
       io.to(roomName).emit('chat:update', chatMessage);
 
       if (moderation.flagged) {
@@ -507,11 +585,23 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     console.log(`Socket disconnected: ${socket.id}`);
 
     for (const room of rooms.values()) {
       if (room.peers.has(socket.id)) {
+        const peer = room.peers.get(socket.id);
+        
+        // Update attendance left_at
+        if (peer && peer.userId && room.roomId) {
+          const { error } = await supabaseAdmin
+            .from('attendance')
+            .update({ left_at: new Date().toISOString() })
+            .eq('room_id', room.roomId)
+            .eq('user_id', peer.userId);
+          if (error) console.error('Attendance update error:', error);
+        }
+
         removePeer(room, socket.id);
         break;
       }

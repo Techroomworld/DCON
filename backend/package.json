@@ -6,9 +6,11 @@
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only server.ts",
     "start": "node dist/server.js",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "seed:admin": "ts-node scripts/seedAdmin.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.107.0",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^4.22.2",

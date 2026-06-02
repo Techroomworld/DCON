@@ -14,6 +14,7 @@
     "backend:start": "npm --prefix backend run start"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.107.0",
     "lucide-react": "^1.17.0",
     "mediasoup-client": "^3.20.0",
     "react": "^19.2.6",
