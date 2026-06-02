@@ -1,16 +1,50 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import { LogOut, Play, Plus, FileUp } from "lucide-react";
+import { LogOut, Play, Plus, FileUp, UploadCloud, MessageSquare } from "lucide-react";
+
+type SessionRecord = {
+  id: string;
+  title: string;
+  description: string;
+  room_name: string;
+  status: string;
+};
+
+type QuestionRecord = {
+  id: string;
+  room_id: string;
+  student_name: string;
+  question: string;
+  answer: string | null;
+  is_answered: boolean;
+};
+
+type AssignmentFormState = {
+  title: string;
+  description: string;
+  file_url: string;
+  due_date: string;
+};
 
 export default function TeacherPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [email, setEmail] = useState("");
+  const [showCreateSession, setShowCreateSession] = useState(false);
+  const [newRoomTitle, setNewRoomTitle] = useState("");
+  const [newRoomName, setNewRoomName] = useState("");
+  const [newRoomDescription, setNewRoomDescription] = useState("");
+  const [assignmentForms, setAssignmentForms] = useState<Record<string, AssignmentFormState>>({});
+  const [assignmentActiveRoom, setAssignmentActiveRoom] = useState<string | null>(null);
+  const [questions, setQuestions] = useState<QuestionRecord[]>([]);
+  const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         navigate("/login");
@@ -30,23 +64,133 @@ export default function TeacherPage() {
 
       setEmail(session.user.email || "");
 
-      // Fetch teacher's sessions
       const { data } = await supabase
         .from("classroom_sessions")
         .select("*")
         .eq("teacher_id", session.user.id)
         .order("created_at", { ascending: false });
 
-      setSessions(data || []);
+      const sessionRecords = data || [];
+      setSessions(sessionRecords);
+
+      if (sessionRecords.length > 0) {
+        const roomIds = sessionRecords.map((item) => item.id);
+        const { data: questionData } = await supabase
+          .from("questions")
+          .select("*")
+          .in("room_id", roomIds)
+          .order("created_at", { ascending: false });
+        setQuestions(questionData || []);
+      }
+
       setLoading(false);
     };
 
-    checkAuth();
+    init();
   }, [navigate]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/login");
+  };
+
+  const refreshSessions = async () => {
+    const { data } = await supabase
+      .from("classroom_sessions")
+      .select("*")
+      .eq("teacher_id", (await supabase.auth.getSession()).data?.session?.user.id)
+      .order("created_at", { ascending: false });
+
+    setSessions(data || []);
+  };
+
+  const handleCreateSession = async () => {
+    if (!newRoomTitle.trim() || !newRoomName.trim()) {
+      setError("Title and room name are required.");
+      return;
+    }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      navigate("/login");
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("classroom_sessions").insert({
+      teacher_id: session.user.id,
+      title: newRoomTitle.trim(),
+      description: newRoomDescription.trim(),
+      room_name: newRoomName.trim(),
+      status: "active",
+      started_at: new Date().toISOString(),
+    });
+
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
+
+    setMessage("Class session created successfully.");
+    setNewRoomTitle("");
+    setNewRoomName("");
+    setNewRoomDescription("");
+    setShowCreateSession(false);
+    await refreshSessions();
+  };
+
+  const handleCreateAssignment = async (roomId: string) => {
+    const form = assignmentForms[roomId];
+    if (!form?.title.trim()) {
+      setError("Assignment title is required.");
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("assignments").insert({
+      room_id: roomId,
+      title: form.title.trim(),
+      description: form.description.trim(),
+      file_url: form.file_url.trim() || null,
+      due_date: form.due_date ? new Date(form.due_date).toISOString() : null,
+    });
+
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
+
+    setMessage("Assignment uploaded successfully.");
+    setAssignmentForms((prev) => ({
+      ...prev,
+      [roomId]: { title: "", description: "", file_url: "", due_date: "" },
+    }));
+    setAssignmentActiveRoom(null);
+  };
+
+  const handleAnswerQuestion = async (questionId: string, answer: string) => {
+    if (!answer.trim()) {
+      setError("Answer text cannot be empty.");
+      return;
+    }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      navigate("/login");
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from("questions")
+      .update({ answer: answer.trim(), is_answered: true, answered_by: session.user.id, answered_at: new Date().toISOString() })
+      .eq("id", questionId);
+
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+
+    setMessage("Question answered successfully.");
+    setAnswerDrafts((prev) => ({ ...prev, [questionId]: "" }));
+    setQuestions((current) => current.map((question) => (question.id === questionId ? { ...question, is_answered: true, answer: answer.trim() } : question)));
   };
 
   if (loading) {
@@ -56,51 +200,233 @@ export default function TeacherPage() {
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-white shadow">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">Teacher Dashboard</h1>
             <p className="text-gray-600">{email}</p>
           </div>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
-          >
-            <LogOut size={20} /> Logout
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => setShowCreateSession((current) => !current)}
+              className="inline-flex items-center gap-2 bg-blue-600 px-5 py-3 text-white rounded-lg hover:bg-blue-700"
+            >
+              <Plus size={20} /> {showCreateSession ? 'Cancel' : 'Create New Session'}
+            </button>
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center gap-2 bg-red-600 px-5 py-3 text-white rounded-lg hover:bg-red-700"
+            >
+              <LogOut size={20} /> Logout
+            </button>
+          </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-12">
-        <div className="mb-6">
-          <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold">
-            <Plus size={20} /> Create New Session
-          </button>
-        </div>
+      <main className="max-w-7xl mx-auto px-6 py-12 space-y-8">
+        {message && <div className="rounded-3xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-emerald-700">{message}</div>}
+        {error && <div className="rounded-3xl bg-red-50 border border-red-200 px-4 py-3 text-red-700">{error}</div>}
+
+        {showCreateSession && (
+          <section className="rounded-3xl bg-white p-6 shadow">
+            <h2 className="text-2xl font-semibold text-slate-900">Create a new classroom session</h2>
+            <div className="grid gap-6 mt-6 md:grid-cols-2">
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Session title</label>
+                <input
+                  value={newRoomTitle}
+                  onChange={(event) => setNewRoomTitle(event.target.value)}
+                  className="mt-2 w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
+                  placeholder="Advanced Math"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700">Room name</label>
+                <input
+                  value={newRoomName}
+                  onChange={(event) => setNewRoomName(event.target.value)}
+                  className="mt-2 w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
+                  placeholder="math-room-101"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-700">Description</label>
+                <textarea
+                  value={newRoomDescription}
+                  onChange={(event) => setNewRoomDescription(event.target.value)}
+                  rows={4}
+                  className="mt-2 w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
+                  placeholder="Enter session description or topic details."
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleCreateSession}
+              className="mt-6 inline-flex items-center gap-2 rounded-3xl bg-blue-600 px-5 py-3 text-white hover:bg-blue-500"
+            >
+              <Plus size={18} /> Create session
+            </button>
+          </section>
+        )}
 
         <div className="grid gap-6">
           {sessions.length === 0 ? (
-            <div className="bg-white p-8 rounded-lg shadow text-center">
-              <p className="text-gray-600">No sessions yet. Create one to get started!</p>
+            <div className="rounded-3xl bg-white p-8 shadow">
+              <p className="text-gray-600">No sessions available yet.</p>
             </div>
           ) : (
             sessions.map((session) => (
-              <div key={session.id} className="bg-white p-6 rounded-lg shadow">
-                <div className="flex justify-between items-start">
+              <section key={session.id} className="rounded-3xl bg-white p-6 shadow">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <h3 className="text-xl font-bold text-gray-800">{session.title}</h3>
-                    <p className="text-gray-600">{session.room_name}</p>
-                    <p className="text-sm text-gray-500">Status: {session.status}</p>
+                    <h3 className="text-2xl font-bold text-slate-900">{session.title}</h3>
+                    <p className="text-sm text-slate-500 mt-2">Room: {session.room_name}</p>
+                    <p className="text-sm text-slate-500 mt-1">Status: {session.status}</p>
+                    <p className="mt-4 text-slate-600">{session.description}</p>
                   </div>
-                  <div className="flex gap-2">
-                    <button className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-3xl bg-green-600 px-4 py-3 text-white hover:bg-green-700"
+                      onClick={() => navigate(`/classroom?room=${session.room_name}`)}
+                    >
                       <Play size={18} /> Start
                     </button>
-                    <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
-                      <FileUp size={18} /> Upload
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-3xl bg-blue-600 px-4 py-3 text-white hover:bg-blue-700"
+                      onClick={() => setAssignmentActiveRoom(session.id === assignmentActiveRoom ? null : session.id)}
+                    >
+                      <UploadCloud size={18} /> Upload
                     </button>
                   </div>
                 </div>
-              </div>
+
+                {assignmentActiveRoom === session.id && (
+                  <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-6">
+                    <h4 className="text-lg font-semibold text-slate-900">Upload assignment for this session</h4>
+                    <div className="grid gap-4 mt-4 md:grid-cols-2">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700">Assignment title</label>
+                        <input
+                          type="text"
+                          value={assignmentForms[session.id]?.title || ''}
+                          onChange={(event) =>
+                            setAssignmentForms((prev) => ({
+                              ...prev,
+                              [session.id]: {
+                                ...(prev[session.id] || { description: '', file_url: '', due_date: '' }),
+                                title: event.target.value,
+                              },
+                            }))
+                          }
+                          className="mt-2 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700">Due date</label>
+                        <input
+                          type="date"
+                          value={assignmentForms[session.id]?.due_date || ''}
+                          onChange={(event) =>
+                            setAssignmentForms((prev) => ({
+                              ...prev,
+                              [session.id]: {
+                                ...(prev[session.id] || { title: '', description: '', file_url: '' }),
+                                due_date: event.target.value,
+                              },
+                            }))
+                          }
+                          className="mt-2 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-slate-700">Description</label>
+                        <textarea
+                          value={assignmentForms[session.id]?.description || ''}
+                          onChange={(event) =>
+                            setAssignmentForms((prev) => ({
+                              ...prev,
+                              [session.id]: {
+                                ...(prev[session.id] || { title: '', file_url: '', due_date: '' }),
+                                description: event.target.value,
+                              },
+                            }))
+                          }
+                          rows={3}
+                          className="mt-2 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-slate-700">File or resource link</label>
+                        <input
+                          type="url"
+                          value={assignmentForms[session.id]?.file_url || ''}
+                          onChange={(event) =>
+                            setAssignmentForms((prev) => ({
+                              ...prev,
+                              [session.id]: {
+                                ...(prev[session.id] || { title: '', description: '', due_date: '' }),
+                                file_url: event.target.value,
+                              },
+                            }))
+                          }
+                          className="mt-2 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-blue-500"
+                          placeholder="https://example.com/materials.pdf"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCreateAssignment(session.id)}
+                      className="mt-4 inline-flex items-center gap-2 rounded-3xl bg-blue-600 px-5 py-3 text-white hover:bg-blue-500"
+                    >
+                      <FileUp size={18} /> Upload Assignment
+                    </button>
+                  </div>
+                )}
+
+                <div className="mt-6 space-y-4">
+                  <h4 className="text-lg font-semibold text-slate-900">Student questions</h4>
+                  {(questions.filter((question) => question.room_id === session.id) || []).length === 0 ? (
+                    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-slate-600">No questions submitted yet.</div>
+                  ) : (
+                    questions
+                      .filter((question) => question.room_id === session.id)
+                      .map((question) => (
+                        <div key={question.id} className="rounded-3xl border border-slate-200 bg-white p-4">
+                          <p className="font-semibold text-slate-900">{question.student_name}</p>
+                          <p className="mt-2 text-slate-600">{question.question}</p>
+                          {question.is_answered ? (
+                            <div className="mt-4 rounded-3xl bg-emerald-50 p-4 text-slate-800">
+                              <p className="font-semibold">Answered</p>
+                              <p>{question.answer}</p>
+                            </div>
+                          ) : (
+                            <div className="mt-4">
+                              <textarea
+                                value={answerDrafts[question.id] || ''}
+                                onChange={(event) =>
+                                  setAnswerDrafts((prev) => ({ ...prev, [question.id]: event.target.value }))
+                                }
+                                rows={3}
+                                className="w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
+                                placeholder="Write your answer here"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleAnswerQuestion(question.id, answerDrafts[question.id] || "")}
+                                className="mt-3 inline-flex items-center gap-2 rounded-3xl bg-green-600 px-5 py-3 text-white hover:bg-green-500"
+                              >
+                                <MessageSquare size={18} /> Answer Question
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                  )}
+                </div>
+              </section>
             ))
           )}
         </div>

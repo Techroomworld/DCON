@@ -3,7 +3,7 @@
   publish = "dist"
 
 [build.environment]
-  VITE_BACKEND_URL = "https://dcon-backend.onrender.com"
+  VITE_BACKEND_URL = "https://dcon-1.onrender.com"
 
 [[redirects]]
   from = "/*"

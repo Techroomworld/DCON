@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { Device } from 'mediasoup-client';
+import { supabase } from '@/lib/supabase';
 
 type Role = 'teacher' | 'student';
 
@@ -310,9 +311,12 @@ export function useMediasoupRoom(session: ClassroomSession | null) {
     const initRoom = async () => {
       if (!socketRef.current) return;
 
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
       socketRef.current.emit(
         'join-room',
-        { roomName: session.roomName, name: session.name, role: session.role },
+        { roomName: session.roomName, name: session.name, role: session.role, token },
         async (response: any) => {
           if (response?.error) {
             setError(response.error);

@@ -61,6 +61,7 @@ export default function Home() {
             <a href="#courses" className="hover:text-white">Courses</a>
             <a href="#about" className="hover:text-white">About</a>
             <a href="#contact" className="hover:text-white">Contact</a>
+            <a href="/student" className="hover:text-white">Classroom</a>
           </div>
 
           <button
@@ -90,6 +91,13 @@ export default function Home() {
             >
               <PlayCircle className="w-5 h-5" />
               Login to Portal
+            </button>
+
+            <button
+              onClick={() => navigate("/student")}
+              className="bg-slate-900/80 border border-white/20 text-white px-10 py-4 rounded-2xl font-bold hover:bg-slate-800 transition"
+            >
+              Open Student Portal
             </button>
 
             <a

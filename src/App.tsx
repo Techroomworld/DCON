@@ -4,6 +4,7 @@ import Login from "./pages/Login";
 import AdminDashboard from "./pages/AdminDashboard";
 import TeacherPage from "./pages/TeacherPage";
 import StudentPage from "./pages/StudentPage";
+import ClassroomPage from "./pages/ClassroomPage";
 import "./styles/index.css";
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
       <Route path="/admin" element={<AdminDashboard />} />
       <Route path="/teacher" element={<TeacherPage />} />
       <Route path="/student" element={<StudentPage />} />
+      <Route path="/classroom" element={<ClassroomPage />} />
       <Route path="*" element={<Home />} />
     </Routes>
   );
