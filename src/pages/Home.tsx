@@ -1,0 +1,183 @@
+import { useEffect } from "react";
+import {
+  GraduationCap,
+  PlayCircle,
+  Video,
+  Users,
+  BarChart3,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
+
+export default function Home() {
+  const navigate = useNavigate();
+
+  // Auto redirect if already logged in
+  useEffect(() => {
+    const session = JSON.parse(
+      localStorage.getItem("dconsSession") || "null"
+    );
+
+    if (session?.role) {
+      if (session.role === "admin") navigate("/admin");
+      if (session.role === "teacher") navigate("/teacher");
+      if (session.role === "student") navigate("/student");
+    }
+  }, [navigate]);
+
+  // Smooth scroll
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLAnchorElement;
+
+      if (target?.tagName === "A" && target.getAttribute("href")?.startsWith("#")) {
+        e.preventDefault();
+
+        const id = target.getAttribute("href")?.replace("#", "");
+        const el = document.getElementById(id || "");
+
+        el?.scrollIntoView({ behavior: "smooth" });
+      }
+    };
+
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, []);
+
+  return (
+    <div className="bg-slate-900 text-white antialiased">
+
+      {/* NAV */}
+      <nav className="bg-slate-900/95 backdrop-blur-xl border-b border-slate-700 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center">
+              <GraduationCap className="w-6 h-6" />
+            </div>
+            <span className="font-extrabold text-2xl">DCONS</span>
+          </div>
+
+          <div className="hidden md:flex gap-8 text-slate-300">
+            <a href="#features" className="hover:text-white">Features</a>
+            <a href="#courses" className="hover:text-white">Courses</a>
+            <a href="#about" className="hover:text-white">About</a>
+            <a href="#contact" className="hover:text-white">Contact</a>
+          </div>
+
+          <button
+            onClick={() => navigate("/login")}
+            className="bg-indigo-600 hover:bg-indigo-700 px-6 py-2 rounded-xl font-semibold"
+          >
+            Login
+          </button>
+        </div>
+      </nav>
+
+      {/* HERO */}
+      <section className="min-h-screen flex items-center justify-center relative overflow-hidden bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500">
+        <div className="text-center max-w-4xl px-6">
+          <h1 className="text-6xl md:text-8xl font-black mb-6">
+            Welcome to <span className="text-yellow-300">DCONS</span>
+          </h1>
+
+          <p className="text-xl text-slate-100 mb-10">
+            The future of online education — connect, learn, and grow.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-6 justify-center">
+            <button
+              onClick={() => navigate("/login")}
+              className="bg-white text-slate-900 px-10 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:scale-105 transition"
+            >
+              <PlayCircle className="w-5 h-5" />
+              Login to Portal
+            </button>
+
+            <a
+              href="#features"
+              className="border border-white px-10 py-4 rounded-2xl font-bold hover:bg-white/10"
+            >
+              Learn More
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURES */}
+      <section id="features" className="py-24 max-w-7xl mx-auto px-8">
+        <h2 className="text-4xl font-black text-center mb-16">
+          Why Choose DCONS?
+        </h2>
+
+        <div className="grid md:grid-cols-3 gap-10">
+          <div className="bg-slate-800 p-8 rounded-3xl">
+            <Video className="w-10 h-10 mb-4 text-indigo-400" />
+            <h3 className="text-xl font-bold mb-2">Live Classes</h3>
+            <p className="text-slate-300">
+              Real-time interactive learning with teachers.
+            </p>
+          </div>
+
+          <div className="bg-slate-800 p-8 rounded-3xl">
+            <Users className="w-10 h-10 mb-4 text-emerald-400" />
+            <h3 className="text-xl font-bold mb-2">Collaboration</h3>
+            <p className="text-slate-300">
+              Work with classmates in real-time sessions.
+            </p>
+          </div>
+
+          <div className="bg-slate-800 p-8 rounded-3xl">
+            <BarChart3 className="w-10 h-10 mb-4 text-purple-400" />
+            <h3 className="text-xl font-bold mb-2">Analytics</h3>
+            <p className="text-slate-300">
+              Track learning progress and performance.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* STATS */}
+      <section className="py-24 bg-slate-950">
+        <div className="max-w-7xl mx-auto px-8 grid md:grid-cols-4 gap-10 text-center">
+          <div>
+            <h3 className="text-4xl font-black">12,000+</h3>
+            <p className="text-slate-400">Students</p>
+          </div>
+          <div>
+            <h3 className="text-4xl font-black">500+</h3>
+            <p className="text-slate-400">Teachers</p>
+          </div>
+          <div>
+            <h3 className="text-4xl font-black">1,200+</h3>
+            <p className="text-slate-400">Courses</p>
+          </div>
+          <div>
+            <h3 className="text-4xl font-black">99.9%</h3>
+            <p className="text-slate-400">Uptime</p>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="py-24 text-center max-w-4xl mx-auto px-8">
+        <h2 className="text-4xl font-black mb-6">
+          Start Learning Today
+        </h2>
+        <p className="text-slate-400 mb-10">
+          Join thousands of students already using DCONS.
+        </p>
+
+        <button
+          onClick={() => navigate("/login")}
+          className="bg-indigo-600 px-10 py-4 rounded-2xl font-bold hover:scale-105 transition"
+        >
+          Get Started
+        </button>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="border-t border-slate-800 py-10 text-center text-slate-500">
+        © 2026 DCONS Learning Platform
+      </footer>
+    </div>
+  );
+}
