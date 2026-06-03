@@ -20,6 +20,15 @@ type ChatMessage = {
   flagged?: boolean;
 };
 
+type ProducerInfo = {
+  id: string;
+  kind: 'audio' | 'video';
+  name: string;
+  role: Role;
+  source?: 'camera' | 'screen';
+  label?: string;
+};
+
 type RemoteStream = {
   id: string;
   label: string;
@@ -52,11 +61,13 @@ export function useMediasoupRoom(session: ClassroomSession | null) {
   const [error, setError] = useState<string | null>(null);
   const [isAudioEnabled, setIsAudioEnabled] = useState(true);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const [moderationAlerts, setModerationAlerts] = useState<string[]>([]);
   const [whiteboardSnapshot, setWhiteboardSnapshot] = useState<string | null>(null);
   const [whiteboardUpdatedBy, setWhiteboardUpdatedBy] = useState<string | null>(null);
 
   const socketRef = useRef<Socket | null>(null);
+  const screenProducerRef = useRef<any>(null);
   const deviceRef = useRef<Device | null>(null);
   const sendTransportRef = useRef<any>(null);
   const recvTransportRef = useRef<any>(null);
@@ -132,7 +143,7 @@ export function useMediasoupRoom(session: ClassroomSession | null) {
   );
 
   const consumeProducer = useCallback(
-    async (producerInfo: { id: string; kind: 'audio' | 'video'; name: string; role: Role }) => {
+    async (producerInfo: ProducerInfo) => {
       if (!recvTransportRef.current || !deviceRef.current) return;
 
       try {
@@ -167,7 +178,9 @@ export function useMediasoupRoom(session: ClassroomSession | null) {
           ...current.filter((item) => item.id !== consumer.id),
           {
             id: consumer.id,
-            label: `${producerInfo.name} (${producerInfo.role})`,
+            label: producerInfo.source === 'screen'
+              ? `${producerInfo.name} (Screen)`
+              : `${producerInfo.name} (${producerInfo.role})`,
             role: producerInfo.role,
             kind: consumer.kind,
             stream,
@@ -252,14 +265,74 @@ export function useMediasoupRoom(session: ClassroomSession | null) {
     setIsVideoEnabled(track.enabled);
   }, [localStream]);
 
+  const stopScreenShare = useCallback(async () => {
+    if (screenProducerRef.current) {
+      try {
+        await screenProducerRef.current.close();
+      } catch (err) {
+        console.warn('Error closing screen producer', err);
+      }
+      screenProducerRef.current = null;
+    }
+
+    setScreenStream((current) => {
+      current?.getTracks().forEach((track) => track.stop());
+      return null;
+    });
+  }, []);
+
+  const shareScreen = useCallback(async () => {
+    if (!sendTransportRef.current) {
+      setError('Send transport is not ready for screen sharing');
+      return;
+    }
+
+    try {
+      const screenMedia = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false,
+      });
+
+      const screenTrack = screenMedia.getVideoTracks()[0];
+      if (!screenTrack) {
+        throw new Error('Unable to capture screen video');
+      }
+
+      const producer = await sendTransportRef.current.produce({
+        track: screenTrack,
+        appData: {
+          source: 'screen',
+          label: `${session?.name || 'Guest'} (Screen)`,
+        },
+      });
+
+      screenProducerRef.current = producer;
+      setScreenStream(screenMedia);
+
+      screenTrack.onended = () => {
+        stopScreenShare();
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Screen share failed';
+      setError(message);
+      setScreenStream((current) => {
+        current?.getTracks().forEach((track) => track.stop());
+        return null;
+      });
+    }
+  }, [session?.name, stopScreenShare]);
+
   const cleanup = useCallback(async () => {
+    screenProducerRef.current?.close();
     recvTransportRef.current?.close();
     sendTransportRef.current?.close();
     socketRef.current?.disconnect();
     localStream?.getTracks().forEach((track) => track.stop());
+    screenStream?.getTracks().forEach((track) => track.stop());
+    setScreenStream(null);
     setIsConnected(false);
     setIsReady(false);
-  }, [localStream]);
+  }, [localStream, screenStream]);
 
   useEffect(() => {
     if (!session) return;
@@ -351,7 +424,7 @@ export function useMediasoupRoom(session: ClassroomSession | null) {
               }
             });
 
-            sendTransport.on('produce', async ({ kind, rtpParameters }: any, callback: any, errback: any) => {
+            sendTransport.on('produce', async ({ kind, rtpParameters, appData }: any, callback: any, errback: any) => {
               try {
                 const result = await new Promise<any>((resolve, reject) => {
                   socketRef.current?.emit(
@@ -361,6 +434,7 @@ export function useMediasoupRoom(session: ClassroomSession | null) {
                       transportId: sendTransport.id,
                       kind,
                       rtpParameters,
+                      appData,
                     },
                     (response: any) => {
                       if (response?.error) {
@@ -434,6 +508,7 @@ export function useMediasoupRoom(session: ClassroomSession | null) {
 
   return {
     localStream,
+    screenStream,
     remoteStreams,
     chatMessages,
     attendance,
@@ -443,10 +518,13 @@ export function useMediasoupRoom(session: ClassroomSession | null) {
     roomStatus,
     isAudioEnabled,
     isVideoEnabled,
+    isScreenSharing: Boolean(screenStream),
     moderationAlerts,
     sendMessage,
     toggleAudio,
     toggleVideo,
+    shareScreen,
+    stopScreenShare,
     sendWhiteboardSnapshot,
     whiteboardSnapshot,
     whiteboardUpdatedBy,

@@ -6,9 +6,11 @@ CREATE TABLE IF NOT EXISTS users (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
   role TEXT CHECK (role IN ('admin', 'teacher', 'student')) DEFAULT 'student',
+  can_login BOOLEAN DEFAULT FALSE,
   full_name TEXT,
   avatar_url TEXT,
   phone TEXT,
+  subject_interest TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
@@ -133,6 +135,15 @@ ALTER TABLE producers ENABLE ROW LEVEL SECURITY;
 CREATE POLICY users_read ON users
   FOR SELECT USING (auth.uid() = id OR (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
 
+CREATE POLICY users_insert ON users
+  FOR INSERT WITH CHECK (id = auth.uid() AND email = auth.email());
+
+CREATE POLICY users_update ON users
+  FOR UPDATE USING (id = auth.uid());
+
+CREATE POLICY users_public_teacher_read ON users
+  FOR SELECT USING (role = 'teacher' OR role = 'admin');
+
 -- Everyone can read active classroom sessions
 CREATE POLICY sessions_read ON classroom_sessions
   FOR SELECT USING (true);
@@ -216,3 +227,81 @@ ALTER TABLE session_access ENABLE ROW LEVEL SECURITY;
 -- Admins can manage session access
 CREATE POLICY session_access_manage ON session_access
   FOR ALL USING ((SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+-- Join requests from teachers/admins for students to join the platform
+CREATE TABLE IF NOT EXISTS join_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  requested_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  student_email TEXT NOT NULL,
+  student_name TEXT,
+  requested_role TEXT CHECK (requested_role IN ('student', 'teacher')) DEFAULT 'student',
+  status TEXT CHECK (status IN ('pending', 'approved', 'declined')) DEFAULT 'pending',
+  review_notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE join_requests ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY join_requests_insert ON join_requests
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+CREATE POLICY join_requests_admin_read ON join_requests
+  FOR SELECT USING ((SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+CREATE POLICY join_requests_admin_update ON join_requests
+  FOR UPDATE USING ((SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+-- Teacher bookings for scheduled lessons
+CREATE TABLE IF NOT EXISTS teacher_bookings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  teacher_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  subject TEXT NOT NULL,
+  topic TEXT,
+  scheduled_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  status TEXT CHECK (status IN ('pending', 'confirmed', 'cancelled')) DEFAULT 'pending',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE teacher_bookings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY teacher_bookings_insert ON teacher_bookings
+  FOR INSERT WITH CHECK (student_id = auth.uid());
+
+CREATE POLICY teacher_bookings_select ON teacher_bookings
+  FOR SELECT USING (
+    student_id = auth.uid() OR
+    teacher_id = auth.uid() OR
+    (SELECT role FROM users WHERE id = auth.uid()) = 'admin'
+  );
+
+CREATE POLICY teacher_bookings_update ON teacher_bookings
+  FOR UPDATE USING (
+    teacher_id = auth.uid() OR
+    student_id = auth.uid() OR
+    (SELECT role FROM users WHERE id = auth.uid()) = 'admin'
+  );
+
+-- Reminders for students and teachers
+CREATE TABLE IF NOT EXISTS reminders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  creator_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  target_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  remind_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE reminders ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY reminders_insert ON reminders
+  FOR INSERT WITH CHECK (creator_id = auth.uid());
+
+CREATE POLICY reminders_read ON reminders
+  FOR SELECT USING (target_user_id = auth.uid() OR creator_id = auth.uid());
+
+CREATE POLICY reminders_update ON reminders
+  FOR UPDATE USING (creator_id = auth.uid());

@@ -59,6 +59,8 @@ type ProducerInfo = {
   kind: 'audio' | 'video';
   name: string;
   role: Role;
+  source?: 'camera' | 'screen';
+  label?: string;
 };
 
 type AttendanceRecord = {
@@ -212,6 +214,71 @@ function buildAttendance(room: RoomInfo): AttendanceRecord[] {
 function sendAttendanceUpdate(room: RoomInfo) {
   room.attendance = buildAttendance(room);
   io.to(room.roomName).emit('attendance:update', room.attendance);
+}
+
+async function getUserFromToken(token: string) {
+  if (!token) return null;
+  const authUser = await verifySupabaseToken(token);
+  if (!authUser) return null;
+
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .select('*')
+    .eq('id', authUser.id)
+    .single();
+
+  return { authUser, userRow: data || null, error };
+}
+
+async function findAuthUserByEmail(email: string) {
+  const authAdmin = (supabaseAdmin.auth.admin as any);
+  if (typeof authAdmin.getUserByEmail === 'function') {
+    const { data, error } = await authAdmin.getUserByEmail(email);
+    if (error) return null;
+    return data?.user || null;
+  }
+
+  if (typeof authAdmin.listUsers === 'function') {
+    const { data, error } = await authAdmin.listUsers({ query: email });
+    if (error) return null;
+    const users = data?.users || [];
+    return users.find((user: any) => user.email === email) || null;
+  }
+
+  return null;
+}
+
+async function createOrUpdateUserRecord(userId: string, email: string, role: string, canLogin = true) {
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+  if (existingError && existingError.code !== 'PGRST116') {
+    console.error('Error checking user record:', existingError);
+  }
+
+  if (existing) {
+    const { error } = await supabaseAdmin
+      .from('users')
+      .update({ role, can_login: canLogin, email, updated_at: new Date().toISOString() })
+      .eq('id', userId);
+    if (error) {
+      throw error;
+    }
+    return existing;
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('users')
+    .insert({ id: userId, email, role, can_login: canLogin, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .single();
+
+  if (error) {
+    throw error;
+  }
+  return data;
 }
 
 function moderateMessage(message: string): { flagged: boolean; reason?: string } {
@@ -433,7 +500,7 @@ io.on('connection', (socket) => {
 
   socket.on('produce', async (data, callback) => {
     try {
-      const { roomName, transportId, kind, rtpParameters } = data || {};
+      const { roomName, transportId, kind, rtpParameters, appData: clientAppData } = data || {};
       const room = getRoom(roomName);
       const peer = room?.peers.get(socket.id);
       const transport = room?.transports.get(transportId);
@@ -449,15 +516,19 @@ io.on('connection', (socket) => {
           peerId: peer.peerId,
           name: peer.name,
           role: peer.role,
+          ...(clientAppData || {}),
         },
       });
 
+      const producerAppData = producer.appData as any;
       const producerInfo: ProducerInfo = {
         id: producer.id,
         peerId: peer.peerId,
         kind,
         name: peer.name,
         role: peer.role,
+        source: producerAppData?.source,
+        label: producerAppData?.label || peer.name,
       };
 
       room.producers.set(producer.id, producerInfo);
@@ -686,6 +757,325 @@ app.get('/session/:roomName/access', async (req, res) => {
   } catch (err) {
     console.error('session access check error', err);
     return res.status(500).json({ allowed: false, reason: 'Server error' });
+  }
+});
+
+app.post('/requests', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    if (!['teacher', 'admin'].includes(currentUser.userRow.role)) {
+      return res.status(403).json({ error: 'Only teachers and admins can request new students' });
+    }
+
+    const { student_email, student_name, requested_role } = req.body;
+    if (!student_email) {
+      return res.status(400).json({ error: 'Student email is required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('join_requests')
+      .insert({
+        requested_by: currentUser.authUser.id,
+        student_email: student_email.toLowerCase(),
+        student_name,
+        requested_role: requested_role === 'teacher' ? 'teacher' : 'student',
+      })
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ request: data });
+  } catch (error) {
+    console.error('create request error', error);
+    return res.status(500).json({ error: 'Unable to create request' });
+  }
+});
+
+app.get('/admin/requests', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || currentUser.userRow?.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('join_requests')
+      .select('*')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ requests: data });
+  } catch (error) {
+    console.error('fetch requests error', error);
+    return res.status(500).json({ error: 'Unable to fetch requests' });
+  }
+});
+
+app.patch('/requests/:id/approve', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || currentUser.userRow?.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const requestId = req.params.id;
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required for approval' });
+    }
+
+    const { data: requestRow, error: requestError } = await supabaseAdmin
+      .from('join_requests')
+      .select('*')
+      .eq('id', requestId)
+      .single();
+    if (requestError || !requestRow) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    if (requestRow.status !== 'pending') {
+      return res.status(400).json({ error: 'Request is already processed' });
+    }
+
+    const studentEmail = requestRow.student_email.toLowerCase();
+    const studentRole = requestRow.requested_role || 'student';
+
+    let authUser = await findAuthUserByEmail(studentEmail);
+    if (!authUser) {
+      const createResult = await (supabaseAdmin.auth.admin as any).createUser({
+        email: studentEmail,
+        password,
+      });
+      if (createResult.error) {
+        return res.status(500).json({ error: createResult.error.message || 'Failed to create auth user' });
+      }
+      authUser = createResult.data.user;
+    } else {
+      const updateResult = await (supabaseAdmin.auth.admin as any).updateUserById(authUser.id, { password });
+      if (updateResult.error) {
+        return res.status(500).json({ error: updateResult.error.message || 'Failed to update password' });
+      }
+    }
+
+    await createOrUpdateUserRecord(authUser.id, studentEmail, studentRole, true);
+
+    const { data: approvedRequest, error: approvalError } = await supabaseAdmin
+      .from('join_requests')
+      .update({ status: 'approved', review_notes: 'Approved by admin', updated_at: new Date().toISOString() })
+      .eq('id', requestId)
+      .single();
+
+    if (approvalError) {
+      return res.status(500).json({ error: approvalError.message });
+    }
+
+    return res.json({ request: approvedRequest });
+  } catch (error) {
+    console.error('approve request error', error);
+    return res.status(500).json({ error: 'Unable to approve request' });
+  }
+});
+
+app.patch('/requests/:id/decline', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || currentUser.userRow?.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const requestId = req.params.id;
+    const { review_notes } = req.body;
+
+    const { data: requestRow, error: requestError } = await supabaseAdmin
+      .from('join_requests')
+      .select('*')
+      .eq('id', requestId)
+      .single();
+    if (requestError || !requestRow) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    const { data: declinedRequest, error: declinedError } = await supabaseAdmin
+      .from('join_requests')
+      .update({ status: 'declined', review_notes: review_notes || 'Declined by admin', updated_at: new Date().toISOString() })
+      .eq('id', requestId)
+      .single();
+
+    if (declinedError) {
+      return res.status(500).json({ error: declinedError.message });
+    }
+
+    return res.json({ request: declinedRequest });
+  } catch (error) {
+    console.error('decline request error', error);
+    return res.status(500).json({ error: 'Unable to decline request' });
+  }
+});
+
+app.get('/admin/users', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || currentUser.userRow?.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('id, email, full_name, role, can_login, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ users: data });
+  } catch (error) {
+    console.error('fetch users error', error);
+    return res.status(500).json({ error: 'Unable to fetch users' });
+  }
+});
+
+app.patch('/admin/users/:id', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || currentUser.userRow?.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const userId = req.params.id;
+    const { can_login, password } = req.body;
+    const updatePayload: Record<string, any> = {};
+    if (typeof can_login === 'boolean') updatePayload.can_login = can_login;
+
+    if (Object.keys(updatePayload).length > 0) {
+      const { error } = await supabaseAdmin
+        .from('users')
+        .update({ ...updatePayload, updated_at: new Date().toISOString() })
+        .eq('id', userId);
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+    }
+
+    if (password) {
+      const updateResult = await (supabaseAdmin.auth.admin as any).updateUserById(userId, { password });
+      if (updateResult.error) {
+        return res.status(500).json({ error: updateResult.error.message || 'Unable to update password' });
+      }
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('id, email, full_name, role, can_login, created_at')
+      .eq('id', userId)
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ user: data });
+  } catch (error) {
+    console.error('update user error', error);
+    return res.status(500).json({ error: 'Unable to update user' });
+  }
+});
+
+app.get('/reminders', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const user = await verifySupabaseToken(token);
+    if (!user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('reminders')
+      .select('*, creator:creator_id(id, email, full_name), target:target_user_id(id, email, full_name)')
+      .or(`creator_id.eq.${user.id},target_user_id.eq.${user.id}`)
+      .order('remind_at', { ascending: true });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ reminders: data });
+  } catch (error) {
+    console.error('fetch reminders error', error);
+    return res.status(500).json({ error: 'Unable to fetch reminders' });
+  }
+});
+
+app.post('/reminders', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { title, description, remind_at, target_email } = req.body;
+    if (!title || !remind_at) {
+      return res.status(400).json({ error: 'Title and reminder date are required' });
+    }
+
+    let targetUserId = currentUser.authUser.id;
+    if (target_email) {
+      const { data: targetUser, error: targetError } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('email', target_email.toLowerCase())
+        .single();
+      if (targetError || !targetUser) {
+        return res.status(404).json({ error: 'Target user not found' });
+      }
+      targetUserId = targetUser.id;
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('reminders')
+      .insert({
+        creator_id: currentUser.authUser.id,
+        target_user_id: targetUserId,
+        title,
+        description,
+        remind_at,
+      })
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ reminder: data });
+  } catch (error) {
+    console.error('create reminder error', error);
+    return res.status(500).json({ error: 'Unable to create reminder' });
   }
 });
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { LogOut, Mic2, MicOff, Video, VideoOff, MessageCircle, ShieldAlert, Users, Sparkles } from 'lucide-react';
+import { LogOut, Mic2, MicOff, Video, VideoOff, MessageCircle, ShieldAlert, Users, Sparkles, Monitor } from 'lucide-react';
 import { useMediasoupRoom } from '@/hooks/useMediasoupRoom';
 import Whiteboard from './Whiteboard';
 
@@ -20,6 +20,7 @@ export default function MediaClassroom({ session }: { session: Session }) {
   const [message, setMessage] = useState('');
   const {
     localStream,
+    screenStream,
     remoteStreams,
     chatMessages,
     attendance,
@@ -28,6 +29,7 @@ export default function MediaClassroom({ session }: { session: Session }) {
     error,
     isAudioEnabled,
     isVideoEnabled,
+    isScreenSharing,
     moderationAlerts,
     whiteboardSnapshot,
     whiteboardUpdatedBy,
@@ -35,6 +37,8 @@ export default function MediaClassroom({ session }: { session: Session }) {
     sendWhiteboardSnapshot,
     toggleAudio,
     toggleVideo,
+    shareScreen,
+    stopScreenShare,
     leaveRoom,
   } = useMediasoupRoom({
     roomName: session.roomName,
@@ -60,8 +64,9 @@ export default function MediaClassroom({ session }: { session: Session }) {
     if (error) return `Error: ${error}`;
     if (!isConnected) return 'Disconnected';
     if (!isReady) return 'Connecting…';
+    if (isScreenSharing) return 'Screen sharing';
     return 'Live';
-  }, [error, isConnected, isReady]);
+  }, [error, isConnected, isReady, isScreenSharing]);
 
   return (
     <div className="bg-slate-950 text-slate-100 min-h-screen p-8">
@@ -114,6 +119,14 @@ export default function MediaClassroom({ session }: { session: Session }) {
                   {isVideoEnabled ? <Video size={16} /> : <VideoOff size={16} />}
                   {isVideoEnabled ? 'Hide video' : 'Show video'}
                 </button>
+                <button
+                  type="button"
+                  onClick={isScreenSharing ? stopScreenShare : shareScreen}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 hover:bg-slate-800"
+                >
+                  <Monitor size={16} />
+                  {isScreenSharing ? 'Stop sharing' : 'Share screen'}
+                </button>
               </div>
             </div>
 
@@ -128,18 +141,36 @@ export default function MediaClassroom({ session }: { session: Session }) {
                         muted
                         playsInline
                         controls={false}
-                        className="h-[320px] w-full object-cover"
+                        className="h-80 w-full object-cover"
                         ref={(video) => {
                           if (video) video.srcObject = localStream;
                         }}
                       />
                     ) : (
-                      <div className="flex h-[320px] items-center justify-center bg-slate-900 text-slate-500">
+                      <div className="flex h-80 items-center justify-center bg-slate-900 text-slate-500">
                         Waiting for camera access…
                       </div>
                     )}
                   </div>
                 </div>
+
+                {screenStream ? (
+                  <div className="rounded-3xl border border-slate-800 bg-slate-950 p-4">
+                    <h3 className="text-lg font-semibold mb-4">Screen Share Preview</h3>
+                    <div className="rounded-3xl overflow-hidden bg-black">
+                      <video
+                        autoPlay
+                        muted
+                        playsInline
+                        controls={false}
+                        className="h-80 w-full object-cover"
+                        ref={(video) => {
+                          if (video) video.srcObject = screenStream;
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="grid gap-4 lg:grid-cols-2">
                   {remoteStreams.filter((stream) => stream.kind === 'video').map((stream) => (
@@ -171,7 +202,7 @@ export default function MediaClassroom({ session }: { session: Session }) {
                   </div>
                 </div>
 
-                <div className="space-y-3 max-h-[420px] overflow-y-auto pr-2">
+                <div className="space-y-3 max-h-105 overflow-y-auto pr-2">
                   {attendance.length > 0 ? (
                     attendance.map((attendee) => (
                       <div key={attendee.id} className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
@@ -227,7 +258,7 @@ export default function MediaClassroom({ session }: { session: Session }) {
                     <h3 className="font-semibold">Class Chat</h3>
                   </div>
 
-                  <div className="space-y-3 max-h-[340px] overflow-y-auto pr-2">
+                  <div className="space-y-3 max-h-85 overflow-y-auto pr-2">
                     {chatMessages.map((chat) => (
                       <div
                         key={chat.id}
