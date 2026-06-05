@@ -1095,6 +1095,88 @@ app.patch('/admin/users/:id', async (req, res) => {
   }
 });
 
+// Admin endpoint to create a new teacher
+app.post('/admin/teachers', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || currentUser.userRow?.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { email, password, full_name } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Create auth user
+    const { data: authUser, error: authError } = await (supabaseAdmin.auth.admin as any).createUser({
+      email: email.toLowerCase(),
+      password: password,
+      email_confirm: true,
+    });
+
+    if (authError) {
+      return res.status(400).json({ error: authError.message || 'Failed to create teacher account' });
+    }
+
+    if (!authUser?.user?.id) {
+      return res.status(500).json({ error: 'Failed to create teacher account' });
+    }
+
+    // Create user profile as teacher (auto-approved)
+    const { data: createdTeacher, error: profileError } = await supabaseAdmin
+      .from('users')
+      .insert({
+        id: authUser.user.id,
+        email: email.toLowerCase(),
+        role: 'teacher',
+        full_name: full_name || email.split('@')[0],
+        can_login: true,
+        approved: true,
+      })
+      .select('*')
+      .single();
+
+    if (profileError) {
+      return res.status(500).json({ error: 'Failed to create teacher profile' });
+    }
+
+    return res.status(201).json({ teacher: createdTeacher });
+  } catch (error) {
+    console.error('create teacher error', error);
+    return res.status(500).json({ error: 'Unable to create teacher' });
+  }
+});
+
+// Admin endpoint to get all teachers
+app.get('/admin/teachers', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || currentUser.userRow?.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('id, email, full_name, can_login, created_at')
+      .eq('role', 'teacher')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ teachers: data });
+  } catch (error) {
+    console.error('fetch teachers error', error);
+    return res.status(500).json({ error: 'Unable to fetch teachers' });
+  }
+});
+
 app.get('/reminders', async (req, res) => {
   try {
     const authHeader = (req.headers.authorization as string) || '';
