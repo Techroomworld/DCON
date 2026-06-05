@@ -47,7 +47,7 @@ type AttendanceRecord = {
 const BACKEND_URL =
   import.meta.env.VITE_BACKEND_URL ||
   import.meta.env.NEXT_PUBLIC_BACKEND_URL ||
-  'http://localhost:4000';
+  'https://dcon-1.onrender.com';
 
 const socketUrl = BACKEND_URL.replace(/\/$/, '');
 

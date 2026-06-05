@@ -92,7 +92,7 @@ export default function ClassroomPage() {
       // Only check for student role; teachers/admins are allowed
       if (sessionRole === 'student') {
         try {
-          const resp = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000'}/session/${classroom.room_name}/access`, {
+          const resp = await fetch(`${import.meta.env.VITE_BACKEND_URL || 'https://dcon-1.onrender.com'}/session/${classroom.room_name}/access`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
