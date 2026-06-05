@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   role TEXT CHECK (role IN ('admin', 'teacher', 'student')) DEFAULT 'student',
   can_login BOOLEAN DEFAULT FALSE,
+  approved BOOLEAN DEFAULT FALSE,
   full_name TEXT,
   avatar_url TEXT,
   phone TEXT,

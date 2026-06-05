@@ -14,6 +14,7 @@ export type User = {
   role: 'admin' | 'teacher' | 'student';
   full_name?: string;
   avatar_url?: string;
+  approved?: boolean;
   created_at: string;
 };
 

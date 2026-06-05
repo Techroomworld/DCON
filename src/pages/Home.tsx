@@ -295,17 +295,23 @@ export default function Home() {
 
                     <div>
                       <label className="block text-sm font-semibold text-slate-700">Teacher</label>
-                      <select
-                        value={bookingTeacher}
-                        onChange={(event) => setBookingTeacher(event.target.value)}
-                        className="mt-3 w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none"
-                      >
-                        {teachers.map((teacher) => (
-                          <option key={teacher.id} value={teacher.id}>
-                            {teacher.full_name || teacher.email}
-                          </option>
-                        ))}
-                      </select>
+                      {teachers.length === 0 ? (
+                        <div className="mt-3 rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 text-slate-500">
+                          No teachers are available right now. Please check back later or sign up and we will notify you when a teacher is assigned.
+                        </div>
+                      ) : (
+                        <select
+                          value={bookingTeacher}
+                          onChange={(event) => setBookingTeacher(event.target.value)}
+                          className="mt-3 w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none"
+                        >
+                          {teachers.map((teacher) => (
+                            <option key={teacher.id} value={teacher.id}>
+                              {teacher.full_name || teacher.email}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
 
                     <div>
@@ -333,7 +339,8 @@ export default function Home() {
 
                     <button
                       onClick={handleBookTeacher}
-                      className="w-full rounded-3xl bg-indigo-600 px-5 py-3 text-white font-semibold hover:bg-indigo-700"
+                      disabled={teachers.length === 0}
+                      className={`w-full rounded-3xl px-5 py-3 text-white font-semibold ${teachers.length === 0 ? 'bg-gray-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
                     >
                       Request booking
                     </button>
@@ -393,6 +400,7 @@ export default function Home() {
       </section>
 
       {/* STATS */}
+      <section className="py-24">
         <div className="max-w-7xl mx-auto px-8 grid md:grid-cols-4 gap-10 text-center">
           <div>
             <h3 className="text-4xl font-black">12,000+</h3>

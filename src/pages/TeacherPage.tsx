@@ -42,6 +42,9 @@ export default function TeacherPage() {
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pendingStudents, setPendingStudents] = useState<Array<{ id: string; email: string; full_name?: string; created_at: string }>>([]);
+
+  const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000';
 
   useEffect(() => {
     const init = async () => {
@@ -83,6 +86,7 @@ export default function TeacherPage() {
         setQuestions(questionData || []);
       }
 
+      await loadPendingStudents();
       setLoading(false);
     };
 
@@ -92,6 +96,59 @@ export default function TeacherPage() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/login");
+  };
+
+  const loadPendingStudents = async () => {
+    setError(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/students/pending`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setError(result.error || 'Unable to load pending students.');
+        return;
+      }
+      setPendingStudents(result.students || []);
+    } catch (err) {
+      setError('Unable to load pending students.');
+    }
+  };
+
+  const handleApproveStudent = async (studentId: string) => {
+    setError(null);
+    setMessage(null);
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      navigate('/login');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/students/${studentId}/approve`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setError(result.error || 'Unable to approve student.');
+        return;
+      }
+      setMessage('Student approved successfully.');
+      await loadPendingStudents();
+    } catch (err) {
+      setError('Unable to approve student.');
+    }
   };
 
   const refreshSessions = async () => {
@@ -225,6 +282,36 @@ export default function TeacherPage() {
       <main className="max-w-7xl mx-auto px-6 py-12 space-y-8">
         {message && <div className="rounded-3xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-emerald-700">{message}</div>}
         {error && <div className="rounded-3xl bg-red-50 border border-red-200 px-4 py-3 text-red-700">{error}</div>}
+
+        <section className="rounded-3xl bg-white p-6 shadow">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold text-slate-900">Pending Student Approvals</h2>
+              <p className="text-sm text-slate-500">Approve student accounts before they can join classes.</p>
+            </div>
+          </div>
+          <div className="mt-6 space-y-4">
+            {pendingStudents.length === 0 ? (
+              <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 text-slate-600">No pending student approvals.</div>
+            ) : (
+              pendingStudents.map((student) => (
+                <div key={student.id} className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-semibold text-slate-900">{student.full_name || student.email}</p>
+                    <p className="text-sm text-slate-500">{student.email}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleApproveStudent(student.id)}
+                    className="inline-flex items-center gap-2 rounded-3xl bg-green-600 px-5 py-3 text-white hover:bg-green-700"
+                  >
+                    Approve Student
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
 
         {showCreateSession && (
           <section className="rounded-3xl bg-white p-6 shadow">

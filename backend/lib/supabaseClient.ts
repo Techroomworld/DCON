@@ -40,3 +40,20 @@ export async function getUserRole(userId: string) {
     return 'student';
   }
 }
+
+export async function getUserApproval(userId: string) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('approved')
+      .eq('id', userId)
+      .single();
+    if (error || !data) {
+      return false;
+    }
+    return data.approved === true;
+  } catch (err) {
+    console.error('Error fetching user approval:', err);
+    return false;
+  }
+}

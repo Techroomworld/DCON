@@ -41,6 +41,8 @@ async function seedAdmin() {
           id: authUser.user.id,
           email: adminEmail,
           role: 'admin',
+          can_login: true,
+          approved: true,
           full_name: 'DCONS Administrator',
         });
 

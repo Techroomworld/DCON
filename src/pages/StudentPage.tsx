@@ -31,6 +31,7 @@ export default function StudentPage() {
   const [submissionUrl, setSubmissionUrl] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isApproved, setIsApproved] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -41,6 +42,13 @@ export default function StudentPage() {
       }
 
       setEmail(session.user.email || "");
+
+      const { data: userData } = await supabase
+        .from("users")
+        .select("approved")
+        .eq("id", session.user.id)
+        .single();
+      setIsApproved(!!userData?.approved);
 
       const { data } = await supabase
         .from("classroom_sessions")
@@ -74,6 +82,10 @@ export default function StudentPage() {
   }, [navigate]);
 
   const handleJoinSession = (roomName: string) => {
+    if (!isApproved) {
+      setError('Your student account is pending teacher approval. You cannot join classes until approved.');
+      return;
+    }
     navigate(`/classroom?room=${roomName}`);
   };
 
@@ -173,6 +185,11 @@ export default function StudentPage() {
           <div>
             <h2 className="text-2xl font-bold text-gray-800">Available Classes</h2>
             <p className="text-gray-600">Join an active class, ask questions, and submit assignments.</p>
+            {!isApproved && (
+              <p className="mt-2 rounded-3xl bg-yellow-50 border border-yellow-200 px-4 py-3 text-yellow-800">
+                Your student account is pending teacher approval. Class access will be enabled once approved.
+              </p>
+            )}
           </div>
           {message && <div className="rounded-3xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-emerald-700">{message}</div>}
           {error && <div className="rounded-3xl bg-red-50 border border-red-200 px-4 py-3 text-red-700">{error}</div>}
@@ -194,7 +211,8 @@ export default function StudentPage() {
                   </div>
                   <button
                     onClick={() => handleJoinSession(session.room_name)}
-                    className="inline-flex items-center gap-2 self-start rounded-lg bg-green-600 px-6 py-3 text-white transition hover:bg-green-700"
+                    disabled={!isApproved}
+                    className={`inline-flex items-center gap-2 self-start rounded-lg px-6 py-3 text-white transition ${isApproved ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'}`}
                   >
                     <Zap size={20} /> Join Class
                   </button>

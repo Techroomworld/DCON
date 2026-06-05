@@ -230,6 +230,21 @@ async function getUserFromToken(token: string) {
   return { authUser, userRow: data || null, error };
 }
 
+async function getUserApproval(userId: string) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('approved')
+      .eq('id', userId)
+      .single();
+
+    return !error && data?.approved === true;
+  } catch (err) {
+    console.error('Error fetching approval status:', err);
+    return false;
+  }
+}
+
 async function findAuthUserByEmail(email: string) {
   const authAdmin = (supabaseAdmin.auth.admin as any);
   if (typeof authAdmin.getUserByEmail === 'function') {
@@ -248,7 +263,7 @@ async function findAuthUserByEmail(email: string) {
   return null;
 }
 
-async function createOrUpdateUserRecord(userId: string, email: string, role: string, canLogin = true) {
+async function createOrUpdateUserRecord(userId: string, email: string, role: string, canLogin = true, approved?: boolean) {
   const { data: existing, error: existingError } = await supabaseAdmin
     .from('users')
     .select('*')
@@ -260,9 +275,19 @@ async function createOrUpdateUserRecord(userId: string, email: string, role: str
   }
 
   if (existing) {
+    const updatePayload: Record<string, any> = {
+      role,
+      can_login: canLogin,
+      email,
+      updated_at: new Date().toISOString(),
+    };
+    if (approved !== undefined) {
+      updatePayload.approved = approved;
+    }
+
     const { error } = await supabaseAdmin
       .from('users')
-      .update({ role, can_login: canLogin, email, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq('id', userId);
     if (error) {
       throw error;
@@ -270,9 +295,19 @@ async function createOrUpdateUserRecord(userId: string, email: string, role: str
     return existing;
   }
 
+  const insertPayload: Record<string, any> = {
+    id: userId,
+    email,
+    role,
+    can_login: canLogin,
+    updated_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+    approved: approved !== undefined ? approved : role !== 'student',
+  };
+
   const { data, error } = await supabaseAdmin
     .from('users')
-    .insert({ id: userId, email, role, can_login: canLogin, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .insert(insertPayload)
     .single();
 
   if (error) {
@@ -391,22 +426,11 @@ io.on('connection', (socket) => {
 
       const peerRole = userRole === 'teacher' ? 'teacher' : 'student';
       const room = await getOrCreateRoom(roomName);
-      // Enforce session access for students: only users with session_access.has_access or paid=true can join
+      // Enforce student approval before joining
       if (peerRole === 'student' && userId && room.roomId) {
-        try {
-          const { data: accessRow } = await supabaseAdmin
-            .from('session_access')
-            .select('has_access, paid')
-            .eq('session_id', room.roomId)
-            .eq('user_id', userId)
-            .single();
-
-          if (!accessRow || (!(accessRow.has_access || accessRow.paid))) {
-            return callback({ error: 'Access denied: payment or enrollment required' });
-          }
-        } catch (err) {
-          console.error('Access check error:', err);
-          return callback({ error: 'Access check failed' });
+        const isApproved = await getUserApproval(userId);
+        if (!isApproved) {
+          return callback({ error: 'Access denied: student account approval pending' });
         }
       }
       const joinedAt = new Date().toISOString();
@@ -724,6 +748,11 @@ app.get('/session/:roomName/access', async (req, res) => {
       return res.json({ allowed: true });
     }
 
+    const isApproved = await getUserApproval(userId);
+    if (!isApproved) {
+      return res.json({ allowed: false, reason: 'Student account approval pending' });
+    }
+
     // Find session by room name
     const { data: session, error: sessErr } = await supabaseAdmin
       .from('classroom_sessions')
@@ -737,26 +766,88 @@ app.get('/session/:roomName/access', async (req, res) => {
 
     const sessionId = session.id;
 
-    // Check session_access table
-    const { data: accessRow, error: accessErr } = await supabaseAdmin
-      .from('session_access')
-      .select('has_access, paid')
-      .eq('session_id', sessionId)
-      .eq('user_id', userId)
-      .single();
-
-    if (accessErr || !accessRow) {
-      return res.json({ allowed: false, reason: 'No access record' });
-    }
-
-    if (accessRow.has_access || accessRow.paid) {
-      return res.json({ allowed: true });
-    }
-
-    return res.json({ allowed: false, reason: 'Access denied' });
+    // If student is approved, allow classroom access here.
+    return res.json({ allowed: true });
   } catch (err) {
     console.error('session access check error', err);
     return res.status(500).json({ allowed: false, reason: 'Server error' });
+  }
+});
+
+app.get('/students/pending', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    if (!['teacher', 'admin'].includes(currentUser.userRow.role)) {
+      return res.status(403).json({ error: 'Teacher or admin access required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('id, email, full_name, created_at')
+      .eq('role', 'student')
+      .eq('approved', false)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ students: data });
+  } catch (error) {
+    console.error('fetch pending students error', error);
+    return res.status(500).json({ error: 'Unable to fetch pending students' });
+  }
+});
+
+app.patch('/students/:id/approve', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    if (!['teacher', 'admin'].includes(currentUser.userRow.role)) {
+      return res.status(403).json({ error: 'Teacher or admin access required' });
+    }
+
+    const studentId = req.params.id;
+
+    const { data: student, error: studentError } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('id', studentId)
+      .single();
+
+    if (studentError || !student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    if (student.role !== 'student') {
+      return res.status(400).json({ error: 'Only student accounts can be approved' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .update({ approved: true, updated_at: new Date().toISOString() })
+      .eq('id', studentId)
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ student: data });
+  } catch (error) {
+    console.error('approve student error', error);
+    return res.status(500).json({ error: 'Unable to approve student' });
   }
 });
 
@@ -874,7 +965,7 @@ app.patch('/requests/:id/approve', async (req, res) => {
       }
     }
 
-    await createOrUpdateUserRecord(authUser.id, studentEmail, studentRole, true);
+    await createOrUpdateUserRecord(authUser.id, studentEmail, studentRole, true, true);
 
     const { data: approvedRequest, error: approvalError } = await supabaseAdmin
       .from('join_requests')

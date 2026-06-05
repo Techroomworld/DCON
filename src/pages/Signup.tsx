@@ -94,6 +94,7 @@ export default function Signup() {
         full_name: name.trim(),
         role: "student",
         can_login: true,
+        approved: false,
         subject_interest: subject,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -124,9 +125,11 @@ export default function Signup() {
         if (bookingError) {
           console.warn("Booking insert warning:", bookingError.message);
         }
+      } else {
+        console.warn('No teacher was selected because none are currently available.');
       }
 
-      setSuccess("Account created successfully. Please log in to continue.");
+      setSuccess("Account created successfully. Please log in to continue. Your student account will need teacher approval before joining classes.");
       setName("");
       setEmail("");
       setPassword("");
