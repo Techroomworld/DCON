@@ -1,1 +1,14 @@
 @import "tailwindcss";
+
+@keyframes float-edu {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-18px) rotate(8deg);
+  }
+}
+
+.animate-float-edu {
+  animation: float-edu 4s ease-in-out infinite;
+}

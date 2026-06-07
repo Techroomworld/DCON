@@ -134,7 +134,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center">
-              <GraduationCap className="w-6 h-6" />
+              <GraduationCap className="w-6 h-6 animate-bounce" />
             </div>
             <span className="font-extrabold text-2xl">DCONS</span>
           </div>
@@ -158,6 +158,9 @@ export default function Home() {
 
       {/* HERO */}
       <section className="min-h-screen flex items-center justify-center relative overflow-hidden bg-gradient-to-br from-indigo-500 via-purple-600 to-pink-500">
+        <div className="pointer-events-none absolute right-8 top-10 opacity-30">
+          <GraduationCap className="w-24 h-24 text-yellow-200 animate-float-edu" />
+        </div>
         <div className="text-center max-w-4xl px-6">
           <h1 className="text-6xl md:text-8xl font-black mb-6">
             Welcome to <span className="text-yellow-300">DCONS</span>
@@ -172,7 +175,7 @@ export default function Home() {
               onClick={() => navigate("/login")}
               className="bg-white text-slate-900 px-10 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:scale-105 transition"
             >
-              <PlayCircle className="w-5 h-5" />
+              <PlayCircle className="w-5 h-5 text-indigo-600 animate-pulse" />
               Login to Portal
             </button>
 
