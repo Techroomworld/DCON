@@ -8,6 +8,11 @@ const teacherEmail = 'constitency@teacher.com';
 const teacherPassword = 'consistence1232';
 const teacherName = 'Prof. James Smith';
 
+// Sample admin account
+const adminEmail = 'dcon@admin.com';
+const adminPassword = 'admindcon1232';
+const adminName = 'DCONS Administrator';
+
 // Sample student accounts
 const students = [
   { email: 'student1@dcons.local', password: 'Student@Dcons123', name: 'Alice Johnson' },
@@ -37,6 +42,8 @@ async function createOrGetUser(email: string, password: string, role: string, fu
           console.error(`Could not find user ID for ${email}`);
           return;
         }
+        await (supabaseAdmin.auth.admin as any).updateUserById(userId, { password });
+        console.log(`Password refreshed for existing user ${email}`);
       } else {
         throw authError;
       }
@@ -63,7 +70,7 @@ async function createOrGetUser(email: string, password: string, role: string, fu
           email: email,
           role: role,
           can_login: true,
-          approved: role === 'teacher' ? true : false, // Teachers auto-approved, students need approval
+          approved: role === 'teacher' || role === 'admin' ? true : false,
           full_name: fullName,
         });
 
@@ -73,7 +80,21 @@ async function createOrGetUser(email: string, password: string, role: string, fu
         console.log(`✅ ${role} created: ${email}`);
       }
     } else {
-      console.log(`✅ ${role} already exists: ${email}`);
+      const { error: updateError } = await supabaseAdmin
+        .from('users')
+        .update({
+          role,
+          can_login: true,
+          approved: role === 'teacher' || role === 'admin' ? true : false,
+          full_name: fullName,
+        })
+        .eq('email', email);
+
+      if (updateError) {
+        console.error(`Error updating profile for ${email}:`, updateError);
+      } else {
+        console.log(`✅ ${role} profile verified: ${email}`);
+      }
     }
   } catch (error) {
     console.error(`Error processing ${email}:`, error);
@@ -84,6 +105,9 @@ async function seedSamples() {
   try {
     console.log('Seeding sample users...\n');
 
+    // Create admin
+    await createOrGetUser(adminEmail, adminPassword, 'admin', adminName);
+
     // Create teacher
     await createOrGetUser(teacherEmail, teacherPassword, 'teacher', teacherName);
 
@@ -93,6 +117,11 @@ async function seedSamples() {
     }
 
     console.log('\n=== Sample Login Credentials ===');
+    console.log('\n🔐 ADMIN ACCOUNT:');
+    console.log(`   Email: ${adminEmail}`);
+    console.log(`   Password: ${adminPassword}`);
+    console.log(`   Name: ${adminName}`);
+
     console.log('\n📚 TEACHER ACCOUNT:');
     console.log(`   Email: ${teacherEmail}`);
     console.log(`   Password: ${teacherPassword}`);
@@ -105,10 +134,6 @@ async function seedSamples() {
       console.log(`      Name: ${student.name}`);
     });
 
-    console.log('\n🔐 ADMIN ACCOUNT:');
-    console.log(`   Email: dcon@admin.com`);
-    console.log(`   Password: admindcon1232`);
-    console.log(`   Name: DCONS Administrator`);
     console.log('\n================================\n');
 
   } catch (error) {

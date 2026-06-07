@@ -19,7 +19,15 @@ async function seedAdmin() {
 
     if (authError) {
       if (authError.message.includes('already exists')) {
-        console.log('Admin user already exists, updating role...');
+        console.log('Admin user already exists, updating password...');
+        const { data: existingUsers } = await (supabaseAdmin.auth.admin as any).listUsers();
+        const existingUser = existingUsers?.users?.find((u: any) => u.email === adminEmail);
+        const userId = existingUser?.id;
+        if (!userId) {
+          throw new Error(`Could not find existing admin user ID for ${adminEmail}`);
+        }
+        await (supabaseAdmin.auth.admin as any).updateUserById(userId, { password: adminPassword });
+        console.log('Admin password refreshed for existing user.');
       } else {
         throw authError;
       }
