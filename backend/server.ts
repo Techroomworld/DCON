@@ -227,7 +227,27 @@ async function getUserFromToken(token: string) {
     .eq('id', authUser.id)
     .single();
 
-  return { authUser, userRow: data || null, error };
+  const userRow = data || null;
+  if (userRow?.role === 'admin' && !userRow.admin_type) {
+    const { data: mainAdmin, error: mainAdminError } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('role', 'admin')
+      .eq('admin_type', 'main')
+      .maybeSingle();
+
+    const assignedAdminType = mainAdmin ? 'section' : 'main';
+    const { error: updateError } = await supabaseAdmin
+      .from('users')
+      .update({ admin_type: assignedAdminType, updated_at: new Date().toISOString() })
+      .eq('id', userRow.id);
+
+    if (!updateError) {
+      userRow.admin_type = assignedAdminType;
+    }
+  }
+
+  return { authUser, userRow, error };
 }
 
 async function getUserApproval(userId: string) {
@@ -1033,7 +1053,7 @@ app.get('/admin/users', async (req, res) => {
 
     const { data, error } = await supabaseAdmin
       .from('users')
-      .select('id, email, full_name, role, can_login, created_at')
+      .select('id, email, full_name, role, admin_type, can_login, created_at')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -1164,9 +1184,21 @@ app.post('/admin/users', async (req, res) => {
     if (!email || !password || !role) {
       return res.status(400).json({ error: 'Email, password, and role are required' });
     }
-    if (!['teacher', 'admin'].includes(role)) {
-      return res.status(400).json({ error: 'Role must be either teacher or admin' });
+    if (!['teacher', 'admin', 'student'].includes(role)) {
+      return res.status(400).json({ error: 'Role must be teacher, admin, or student' });
     }
+
+    if (role === 'admin' && currentUser.userRow?.admin_type !== 'main') {
+      return res.status(403).json({ error: 'Only the main admin can create additional admin accounts' });
+    }
+
+    const { count } = await supabaseAdmin
+      .from('users')
+      .select('*', { count: 'exact', head: true })
+      .eq('role', 'admin');
+
+    const isFirstAdmin = !count || count === 0;
+    const adminType = role === 'admin' ? (isFirstAdmin ? 'main' : 'section') : undefined;
 
     const { data: authUser, error: authError } = await (supabaseAdmin.auth.admin as any).createUser({
       email: email.toLowerCase(),
@@ -1182,16 +1214,22 @@ app.post('/admin/users', async (req, res) => {
       return res.status(500).json({ error: 'Failed to create user account' });
     }
 
+    const insertData: any = {
+      id: authUser.user.id,
+      email: email.toLowerCase(),
+      role,
+      full_name: full_name || email.split('@')[0],
+      can_login: true,
+      approved: true,
+    };
+
+    if (adminType) {
+      insertData.admin_type = adminType;
+    }
+
     const { data: createdUser, error: profileError } = await supabaseAdmin
       .from('users')
-      .insert({
-        id: authUser.user.id,
-        email: email.toLowerCase(),
-        role,
-        full_name: full_name || email.split('@')[0],
-        can_login: true,
-        approved: true,
-      })
+      .insert(insertData)
       .select('*')
       .single();
 

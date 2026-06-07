@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   email TEXT UNIQUE NOT NULL,
   role TEXT CHECK (role IN ('admin', 'teacher', 'student')) DEFAULT 'student',
+  admin_type TEXT CHECK (admin_type IN ('main', 'section')) DEFAULT 'section',
   can_login BOOLEAN DEFAULT FALSE,
   approved BOOLEAN DEFAULT FALSE,
   full_name TEXT,

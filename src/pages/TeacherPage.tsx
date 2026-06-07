@@ -47,7 +47,7 @@ export default function TeacherPage() {
   const [error, setError] = useState<string | null>(null);
   const [pendingStudents, setPendingStudents] = useState<Array<{ id: string; email: string; full_name?: string; created_at: string }>>([]);
 
-  const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000';
+  const API_URL = import.meta.env.VITE_BACKEND_URL || 'https://dcon-1.onrender.com';
 
   useEffect(() => {
     const init = async () => {
