@@ -133,6 +133,77 @@ ALTER TABLE articles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE whiteboard_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE producers ENABLE ROW LEVEL SECURITY;
 
+-- Drop policies first so the schema file can be rerun safely
+DROP POLICY IF EXISTS users_read ON public.users;
+DROP POLICY IF EXISTS users_insert ON public.users;
+DROP POLICY IF EXISTS users_update ON public.users;
+DROP POLICY IF EXISTS users_public_teacher_read ON public.users;
+
+DROP POLICY IF EXISTS sessions_read ON public.classroom_sessions;
+DROP POLICY IF EXISTS sessions_create ON public.classroom_sessions;
+DROP POLICY IF EXISTS sessions_update ON public.classroom_sessions;
+
+DROP POLICY IF EXISTS chat_read ON public.chat_messages;
+DROP POLICY IF EXISTS chat_insert ON public.chat_messages;
+
+DROP POLICY IF EXISTS attendance_read ON public.attendance;
+DROP POLICY IF EXISTS attendance_insert ON public.attendance;
+
+DROP POLICY IF EXISTS questions_read ON public.questions;
+DROP POLICY IF EXISTS questions_create ON public.questions;
+DROP POLICY IF EXISTS questions_update ON public.questions;
+
+DROP POLICY IF EXISTS assignments_create ON public.assignments;
+DROP POLICY IF EXISTS assignments_read ON public.assignments;
+
+DROP POLICY IF EXISTS submissions_create ON public.submissions;
+DROP POLICY IF EXISTS submissions_read ON public.submissions;
+
+DROP POLICY IF EXISTS session_access_manage ON public.session_access;
+
+DROP POLICY IF EXISTS join_requests_insert ON public.join_requests;
+DROP POLICY IF EXISTS join_requests_admin_read ON public.join_requests;
+DROP POLICY IF EXISTS join_requests_admin_update ON public.join_requests;
+
+DROP POLICY IF EXISTS teacher_bookings_insert ON public.teacher_bookings;
+DROP POLICY IF EXISTS teacher_bookings_select ON public.teacher_bookings;
+DROP POLICY IF EXISTS teacher_bookings_update ON public.teacher_bookings;
+
+DROP POLICY IF EXISTS reminders_insert ON public.reminders;
+DROP POLICY IF EXISTS reminders_read ON public.reminders;
+DROP POLICY IF EXISTS reminders_update ON public.reminders;
+
+DROP POLICY IF EXISTS email_notifications_insert ON public.email_notifications;
+DROP POLICY IF EXISTS email_notifications_read ON public.email_notifications;
+
+DROP POLICY IF EXISTS direct_messages_insert ON public.direct_messages;
+DROP POLICY IF EXISTS direct_messages_read ON public.direct_messages;
+
+DROP POLICY IF EXISTS grades_insert ON public.grades;
+DROP POLICY IF EXISTS grades_read ON public.grades;
+
+DROP POLICY IF EXISTS certificates_insert ON public.certificates;
+DROP POLICY IF EXISTS certificates_read ON public.certificates;
+
+DROP POLICY IF EXISTS session_recordings_insert ON public.session_recordings;
+DROP POLICY IF EXISTS session_recordings_read ON public.session_recordings;
+
+DROP POLICY IF EXISTS scheduled_events_insert ON public.scheduled_events;
+DROP POLICY IF EXISTS scheduled_events_read ON public.scheduled_events;
+
+DROP POLICY IF EXISTS parent_students_insert ON public.parent_students;
+DROP POLICY IF EXISTS parent_students_read ON public.parent_students;
+
+DROP POLICY IF EXISTS announcements_insert ON public.announcements;
+DROP POLICY IF EXISTS announcements_read ON public.announcements;
+DROP POLICY IF EXISTS announcements_update ON public.announcements;
+
+DROP POLICY IF EXISTS teacher_reviews_insert ON public.teacher_reviews;
+DROP POLICY IF EXISTS teacher_reviews_read ON public.teacher_reviews;
+
+DROP POLICY IF EXISTS two_factor_codes_insert ON public.two_factor_codes;
+DROP POLICY IF EXISTS two_factor_codes_read ON public.two_factor_codes;
+
 -- Users can read their own profile or if admin
 CREATE POLICY users_read ON users
   FOR SELECT USING (auth.uid() = id OR (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
