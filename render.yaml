@@ -18,5 +18,3 @@ services:
         value: ""
       - key: FRONTEND_URL
         value: "https://dcons.netlify.app"
-      - key: PORT
-        value: "4000"
