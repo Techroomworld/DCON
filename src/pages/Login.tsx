@@ -138,6 +138,7 @@ export default function Login() {
 
         <p className="text-xs text-gray-500 text-center mt-6">
           Use your email and password to sign in. Students can also sign up for a new account.
+          Teacher and admin accounts must be created by an existing admin.
         </p>
       </div>
     </div>

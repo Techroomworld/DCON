@@ -306,3 +306,216 @@ CREATE POLICY reminders_read ON reminders
 
 CREATE POLICY reminders_update ON reminders
   FOR UPDATE USING (creator_id = auth.uid());
+
+-- Email Notifications (for approval, grade, assignment, etc.)
+CREATE TABLE IF NOT EXISTS email_notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipient_email TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  type TEXT NOT NULL,
+  message TEXT,
+  sent BOOLEAN DEFAULT FALSE,
+  sent_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE email_notifications ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY email_notifications_insert ON email_notifications
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+CREATE POLICY email_notifications_read ON email_notifications
+  FOR SELECT USING (user_id = auth.uid() OR (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+-- Direct Messages (1-on-1 chat)
+CREATE TABLE IF NOT EXISTS direct_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipient_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  message TEXT NOT NULL,
+  read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE direct_messages ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY direct_messages_insert ON direct_messages
+  FOR INSERT WITH CHECK (sender_id = auth.uid());
+
+CREATE POLICY direct_messages_read ON direct_messages
+  FOR SELECT USING (sender_id = auth.uid() OR recipient_id = auth.uid());
+
+-- Student Grades / Performance Records
+CREATE TABLE IF NOT EXISTS grades (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  assignment_id UUID REFERENCES assignments(id) ON DELETE CASCADE,
+  room_id UUID REFERENCES classroom_sessions(id) ON DELETE CASCADE,
+  grade NUMERIC(5, 2) NOT NULL,
+  feedback TEXT,
+  graded_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  graded_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE grades ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY grades_insert ON grades
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+CREATE POLICY grades_read ON grades
+  FOR SELECT USING (student_id = auth.uid() OR (SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+-- Certificates of Completion
+CREATE TABLE IF NOT EXISTS certificates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  course_id UUID REFERENCES classroom_sessions(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  issued_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  certificate_url TEXT,
+  issued_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE certificates ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY certificates_insert ON certificates
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+CREATE POLICY certificates_read ON certificates
+  FOR SELECT USING (student_id = auth.uid() OR (SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+-- Session Recordings
+CREATE TABLE IF NOT EXISTS session_recordings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id UUID NOT NULL REFERENCES classroom_sessions(id) ON DELETE CASCADE,
+  recording_url TEXT NOT NULL,
+  duration_seconds INTEGER,
+  recorded_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recorded_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE session_recordings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY session_recordings_insert ON session_recordings
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+CREATE POLICY session_recordings_read ON session_recordings
+  FOR SELECT USING (true);
+
+-- Scheduled Events / Calendar
+CREATE TABLE IF NOT EXISTS scheduled_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  creator_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  event_date TIMESTAMP WITH TIME ZONE NOT NULL,
+  event_type TEXT CHECK (event_type IN ('class', 'meeting', 'deadline', 'exam', 'other')),
+  room_id UUID REFERENCES classroom_sessions(id) ON DELETE CASCADE,
+  recurrence TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE scheduled_events ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY scheduled_events_insert ON scheduled_events
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+CREATE POLICY scheduled_events_read ON scheduled_events
+  FOR SELECT USING (true);
+
+-- Parent-Student Relationships (Parent Portal)
+CREATE TABLE IF NOT EXISTS parent_students (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  parent_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  relationship TEXT,
+  verified BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE parent_students ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY parent_students_insert ON parent_students
+  FOR INSERT WITH CHECK (parent_id = auth.uid() OR (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+CREATE POLICY parent_students_read ON parent_students
+  FOR SELECT USING (parent_id = auth.uid() OR student_id = auth.uid() OR (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+-- Announcement Board
+CREATE TABLE IF NOT EXISTS announcements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  audience TEXT CHECK (audience IN ('all', 'students', 'teachers', 'admins')) DEFAULT 'all',
+  pinned BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY announcements_insert ON announcements
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+CREATE POLICY announcements_read ON announcements
+  FOR SELECT USING (true);
+
+CREATE POLICY announcements_update ON announcements
+  FOR UPDATE USING (created_by = auth.uid() OR (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+-- Teacher Reviews and Ratings
+CREATE TABLE IF NOT EXISTS teacher_reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  teacher_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  rating INTEGER CHECK (rating >= 1 AND rating <= 5) NOT NULL,
+  review TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE teacher_reviews ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY teacher_reviews_insert ON teacher_reviews
+  FOR INSERT WITH CHECK (student_id = auth.uid());
+
+CREATE POLICY teacher_reviews_read ON teacher_reviews
+  FOR SELECT USING (teacher_id = auth.uid() OR student_id = auth.uid() OR (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+-- Two-factor authentication codes
+CREATE TABLE IF NOT EXISTS two_factor_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code TEXT NOT NULL,
+  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  used BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+ALTER TABLE two_factor_codes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY two_factor_codes_insert ON two_factor_codes
+  FOR INSERT WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY two_factor_codes_read ON two_factor_codes
+  FOR SELECT USING (user_id = auth.uid());
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_email_notifications_user_id ON email_notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_direct_messages_sender_id ON direct_messages(sender_id);
+CREATE INDEX IF NOT EXISTS idx_direct_messages_recipient_id ON direct_messages(recipient_id);
+CREATE INDEX IF NOT EXISTS idx_direct_messages_created_at ON direct_messages(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_grades_student_id ON grades(student_id);
+CREATE INDEX IF NOT EXISTS idx_grades_assignment_id ON grades(assignment_id);
+CREATE INDEX IF NOT EXISTS idx_certificates_student_id ON certificates(student_id);
+CREATE INDEX IF NOT EXISTS idx_session_recordings_room_id ON session_recordings(room_id);
+CREATE INDEX IF NOT EXISTS idx_scheduled_events_creator_id ON scheduled_events(creator_id);
+CREATE INDEX IF NOT EXISTS idx_scheduled_events_event_date ON scheduled_events(event_date);
+CREATE INDEX IF NOT EXISTS idx_parent_students_parent_id ON parent_students(parent_id);
+CREATE INDEX IF NOT EXISTS idx_parent_students_student_id ON parent_students(student_id);
+

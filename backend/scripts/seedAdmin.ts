@@ -3,8 +3,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const adminEmail = 'admin@dcons.local';
-const adminPassword = 'Admin@Dcons123';
+const adminEmail = 'dcon@admin.com';
+const adminPassword = 'admindcon1232';
 
 async function seedAdmin() {
   try {

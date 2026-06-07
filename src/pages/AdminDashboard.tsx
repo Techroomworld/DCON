@@ -20,9 +20,11 @@ interface Teacher {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:4000';
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'teachers' | 'students'>('overview');
   const [token, setToken] = useState('');
+  const [newUserRole, setNewUserRole] = useState<'teacher' | 'admin'>('teacher');
   
   const [stats, setStats] = useState<Stats>({
     totalUsers: 0,
@@ -52,6 +54,14 @@ export default function AdminDashboard() {
         .eq("id", session.user.id)
         .single();
 
+      if (userData?.role === "teacher") {
+        navigate("/teacher");
+        return;
+      }
+      if (userData?.role === "student") {
+        navigate("/student");
+        return;
+      }
       if (userData?.role !== "admin") {
         navigate("/login");
         return;
@@ -85,7 +95,7 @@ export default function AdminDashboard() {
 
   const fetchTeachers = async (accessToken: string) => {
     try {
-      const response = await fetch('http://localhost:3001/admin/teachers', {
+      const response = await fetch(`${API_URL}/admin/teachers`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       const data = await response.json();
@@ -108,7 +118,7 @@ export default function AdminDashboard() {
     }
 
     try {
-      const response = await fetch('http://localhost:3001/admin/teachers', {
+      const response = await fetch(`${API_URL}/admin/users`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -118,6 +128,7 @@ export default function AdminDashboard() {
           email: newTeacher.email,
           password: newTeacher.password,
           full_name: newTeacher.full_name || newTeacher.email.split('@')[0],
+          role: newUserRole,
         }),
       });
 
@@ -128,7 +139,7 @@ export default function AdminDashboard() {
         return;
       }
 
-      setAddTeacherSuccess('Teacher created successfully!');
+      setAddTeacherSuccess(`${newUserRole === 'admin' ? 'Admin' : 'Teacher'} created successfully!`);
       setNewTeacher({ email: '', password: '', full_name: '' });
       setShowAddTeacher(false);
       await fetchTeachers(token);
@@ -253,19 +264,30 @@ export default function AdminDashboard() {
         {activeTab === 'teachers' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-gray-800">Teacher Management</h2>
+              <h2 className="text-2xl font-bold text-gray-800">User Management</h2>
               <button
                 onClick={() => setShowAddTeacher(!showAddTeacher)}
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
               >
-                <Plus size={20} /> Add Teacher
+                <Plus size={20} /> Add User
               </button>
             </div>
 
             {showAddTeacher && (
               <div className="bg-white p-6 rounded-lg shadow">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">Create New Teacher</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Create New User</h3>
                 <form onSubmit={handleAddTeacher} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                    <select
+                      value={newUserRole}
+                      onChange={(e) => setNewUserRole(e.target.value as 'teacher' | 'admin')}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                      <option value="teacher">Teacher</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                     <input
@@ -312,7 +334,7 @@ export default function AdminDashboard() {
                       type="submit"
                       className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-semibold"
                     >
-                      Create Teacher
+                      Create {newUserRole === 'admin' ? 'Admin' : 'Teacher'}
                     </button>
                     <button
                       type="button"

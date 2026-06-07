@@ -4,8 +4,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Sample teacher account
-const teacherEmail = 'teacher@dcons.local';
-const teacherPassword = 'Teacher@Dcons123';
+const teacherEmail = 'constitency@teacher.com';
+const teacherPassword = 'consistence1232';
 const teacherName = 'Prof. James Smith';
 
 // Sample student accounts
@@ -13,6 +13,7 @@ const students = [
   { email: 'student1@dcons.local', password: 'Student@Dcons123', name: 'Alice Johnson' },
   { email: 'student2@dcons.local', password: 'Student@Dcons123', name: 'Bob Wilson' },
   { email: 'student3@dcons.local', password: 'Student@Dcons123', name: 'Charlie Davis' },
+  { email: 'dcon@student.com', password: 'student1232', name: 'DCONS Student' },
 ];
 
 async function createOrGetUser(email: string, password: string, role: string, fullName: string) {
@@ -105,8 +106,8 @@ async function seedSamples() {
     });
 
     console.log('\n🔐 ADMIN ACCOUNT:');
-    console.log(`   Email: admin@dcons.local`);
-    console.log(`   Password: Admin@Dcons123`);
+    console.log(`   Email: dcon@admin.com`);
+    console.log(`   Password: admindcon1232`);
     console.log(`   Name: DCONS Administrator`);
     console.log('\n================================\n');
 

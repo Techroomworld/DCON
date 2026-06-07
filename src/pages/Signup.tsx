@@ -121,12 +121,7 @@ export default function Signup() {
           bookingPayload.scheduled_at = new Date(preferredDate).toISOString();
         }
 
-        const { error: bookingError } = await supabase.from("teacher_bookings").insert(bookingPayload);
-        if (bookingError) {
-          console.warn("Booking insert warning:", bookingError.message);
-        }
-      } else {
-        console.warn('No teacher was selected because none are currently available.');
+        await supabase.from("teacher_bookings").insert(bookingPayload);
       }
 
       setSuccess("Account created successfully. Please log in to continue. Your student account will need teacher approval before joining classes.");
@@ -147,7 +142,8 @@ export default function Signup() {
       <div className="w-full max-w-2xl rounded-3xl bg-white/95 p-8 shadow-2xl backdrop-blur-xl">
         <h1 className="text-4xl font-extrabold text-slate-900 mb-2">Student Signup</h1>
         <p className="text-slate-600 mb-8">
-          Create your account, choose your subject, and request a teacher booking.
+          Create your student account, choose your subject, and request a teacher booking.
+          Teacher and admin accounts must be created by an existing admin.
         </p>
 
         {error && (

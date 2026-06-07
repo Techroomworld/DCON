@@ -1150,6 +1150,62 @@ app.post('/admin/teachers', async (req, res) => {
   }
 });
 
+// Admin endpoint to create a new user (teacher or admin)
+app.post('/admin/users', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || currentUser.userRow?.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { email, password, full_name, role } = req.body;
+    if (!email || !password || !role) {
+      return res.status(400).json({ error: 'Email, password, and role are required' });
+    }
+    if (!['teacher', 'admin'].includes(role)) {
+      return res.status(400).json({ error: 'Role must be either teacher or admin' });
+    }
+
+    const { data: authUser, error: authError } = await (supabaseAdmin.auth.admin as any).createUser({
+      email: email.toLowerCase(),
+      password: password,
+      email_confirm: true,
+    });
+
+    if (authError) {
+      return res.status(400).json({ error: authError.message || 'Failed to create user account' });
+    }
+
+    if (!authUser?.user?.id) {
+      return res.status(500).json({ error: 'Failed to create user account' });
+    }
+
+    const { data: createdUser, error: profileError } = await supabaseAdmin
+      .from('users')
+      .insert({
+        id: authUser.user.id,
+        email: email.toLowerCase(),
+        role,
+        full_name: full_name || email.split('@')[0],
+        can_login: true,
+        approved: true,
+      })
+      .select('*')
+      .single();
+
+    if (profileError) {
+      return res.status(500).json({ error: 'Failed to create user profile' });
+    }
+
+    return res.status(201).json({ user: createdUser });
+  } catch (error) {
+    console.error('create user error', error);
+    return res.status(500).json({ error: 'Unable to create user' });
+  }
+});
+
 // Admin endpoint to get all teachers
 app.get('/admin/teachers', async (req, res) => {
   try {
@@ -1203,7 +1259,7 @@ app.get('/reminders', async (req, res) => {
   }
 });
 
-app.post('/reminders', async (req, res) => {
+app.post('/attendance', async (req, res) => {
   try {
     const authHeader = (req.headers.authorization as string) || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
@@ -1212,32 +1268,19 @@ app.post('/reminders', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const { title, description, remind_at, target_email } = req.body;
-    if (!title || !remind_at) {
-      return res.status(400).json({ error: 'Title and reminder date are required' });
-    }
-
-    let targetUserId = currentUser.authUser.id;
-    if (target_email) {
-      const { data: targetUser, error: targetError } = await supabaseAdmin
-        .from('users')
-        .select('id')
-        .eq('email', target_email.toLowerCase())
-        .single();
-      if (targetError || !targetUser) {
-        return res.status(404).json({ error: 'Target user not found' });
-      }
-      targetUserId = targetUser.id;
+    const { room_id, joined_at, left_at, status } = req.body;
+    if (!room_id || !joined_at) {
+      return res.status(400).json({ error: 'Room ID and join time are required' });
     }
 
     const { data, error } = await supabaseAdmin
-      .from('reminders')
+      .from('attendance')
       .insert({
-        creator_id: currentUser.authUser.id,
-        target_user_id: targetUserId,
-        title,
-        description,
-        remind_at,
+        user_id: currentUser.authUser.id,
+        room_id,
+        joined_at,
+        left_at,
+        status,
       })
       .single();
 
@@ -1245,10 +1288,806 @@ app.post('/reminders', async (req, res) => {
       return res.status(500).json({ error: error.message });
     }
 
-    return res.json({ reminder: data });
+    return res.json({ attendance: data });
   } catch (error) {
-    console.error('create reminder error', error);
-    return res.status(500).json({ error: 'Unable to create reminder' });
+    console.error('create attendance error', error);
+    return res.status(500).json({ error: 'Unable to record attendance' });
+  }
+});
+
+app.post('/assignments', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (!['teacher', 'admin'].includes(currentUser.userRow.role)) {
+      return res.status(403).json({ error: 'Teacher or admin access required' });
+    }
+
+    const { title, description, due_date, room_id, assignment_url } = req.body;
+    if (!title || !due_date) {
+      return res.status(400).json({ error: 'Title and due date are required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('assignments')
+      .insert({
+        title,
+        description,
+        due_date,
+        room_id,
+        assignment_url,
+        created_by: currentUser.authUser.id,
+      })
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ assignment: data });
+  } catch (error) {
+    console.error('create assignment error', error);
+    return res.status(500).json({ error: 'Unable to create assignment' });
+  }
+});
+
+app.get('/assignments', async (req, res) => {
+  try {
+    const roomId = req.query.room_id as string | undefined;
+    let query = supabaseAdmin.from('assignments').select('*');
+    if (roomId) query = query.eq('room_id', roomId);
+    const { data, error } = await query;
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ assignments: data });
+  } catch (error) {
+    console.error('fetch assignments error', error);
+    return res.status(500).json({ error: 'Unable to fetch assignments' });
+  }
+});
+
+app.get('/submissions', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const assignmentId = req.query.assignment_id as string | undefined;
+    const studentId = req.query.student_id as string | undefined;
+    let query = supabaseAdmin.from('submissions').select('*');
+
+    if (assignmentId) {
+      query = query.eq('assignment_id', assignmentId);
+    }
+    if (studentId) {
+      query = query.eq('student_id', studentId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ submissions: data });
+  } catch (error) {
+    console.error('fetch submissions error', error);
+    return res.status(500).json({ error: 'Unable to fetch submissions' });
+  }
+});
+
+app.patch('/submissions/:id/grade', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    if (!['teacher', 'admin'].includes(currentUser.userRow.role)) {
+      return res.status(403).json({ error: 'Teacher or admin access required' });
+    }
+
+    const submissionId = req.params.id;
+    const { grade, feedback } = req.body;
+    if (grade === undefined || grade === null) {
+      return res.status(400).json({ error: 'Grade is required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('submissions')
+      .update({ feedback, grade })
+      .eq('id', submissionId)
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    const submissionData = data as any;
+    if (submissionData) {
+      await supabaseAdmin.from('grades').insert({
+        student_id: submissionData.student_id,
+        assignment_id: submissionData.assignment_id,
+        room_id: null,
+        grade,
+        feedback,
+        graded_by: currentUser.authUser.id,
+      });
+    }
+
+    return res.json({ submission: data });
+  } catch (error) {
+    console.error('grade submission error', error);
+    return res.status(500).json({ error: 'Unable to grade submission' });
+  }
+});
+
+app.get('/attendance', async (req, res) => {
+  try {
+    const roomId = req.query.room_id as string | undefined;
+    const studentId = req.query.student_id as string | undefined;
+    let query = supabaseAdmin.from('attendance').select('*');
+
+    if (roomId) query = query.eq('room_id', roomId);
+    if (studentId) query = query.eq('user_id', studentId);
+
+    const { data, error } = await query.order('joined_at', { ascending: false });
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ attendance: data });
+  } catch (error) {
+    console.error('fetch attendance error', error);
+    return res.status(500).json({ error: 'Unable to fetch attendance' });
+  }
+});
+
+app.get('/analytics/student/:id', async (req, res) => {
+  try {
+    const studentId = req.params.id;
+
+    const [gradesRes, attendanceRes] = await Promise.all([
+      supabaseAdmin.from('grades').select('grade, feedback, assignment_id, room_id').eq('student_id', studentId),
+      supabaseAdmin.from('attendance').select('id').eq('user_id', studentId),
+    ]);
+
+    if (gradesRes.error || attendanceRes.error) {
+      return res.status(500).json({ error: gradesRes.error?.message || attendanceRes.error?.message });
+    }
+
+    const grades = gradesRes.data || [];
+    const averageGrade = grades.length ? grades.reduce((sum, item) => sum + Number(item.grade), 0) / grades.length : 0;
+    return res.json({
+      averageGrade,
+      grades,
+      attendanceCount: attendanceRes.data?.length || 0,
+    });
+  } catch (error) {
+    console.error('student analytics error', error);
+    return res.status(500).json({ error: 'Unable to load analytics' });
+  }
+});
+
+app.get('/analytics/teacher/:id', async (req, res) => {
+  try {
+    const teacherId = req.params.id;
+
+    const [sessionsRes, submissionsRes, reviewsRes] = await Promise.all([
+      supabaseAdmin.from('classroom_sessions').select('id').eq('teacher_id', teacherId),
+      supabaseAdmin.from('teacher_reviews').select('rating').eq('teacher_id', teacherId),
+      supabaseAdmin.from('assignments').select('id').eq('created_by', teacherId),
+    ]);
+
+    if (sessionsRes.error || submissionsRes.error || reviewsRes.error) {
+      return res.status(500).json({ error: sessionsRes.error?.message || submissionsRes.error?.message || reviewsRes.error?.message });
+    }
+
+    const reviews = (reviewsRes.data as unknown as Array<{ rating: number }>) || [];
+    const averageRating = reviews.length ? reviews.reduce((sum, item) => sum + Number(item.rating), 0) / reviews.length : 0;
+
+    return res.json({
+      sessionCount: sessionsRes.data?.length || 0,
+      assignmentCount: submissionsRes.data?.length || 0,
+      averageRating,
+      reviews,
+    });
+  } catch (error) {
+    console.error('teacher analytics error', error);
+    return res.status(500).json({ error: 'Unable to load analytics' });
+  }
+});
+
+app.get('/notifications', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('email_notifications')
+      .select('*')
+      .or(`user_id.eq.${currentUser.authUser.id},recipient_email.eq.${currentUser.authUser.email}`)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ notifications: data });
+  } catch (error) {
+    console.error('fetch notifications error', error);
+    return res.status(500).json({ error: 'Unable to fetch notifications' });
+  }
+});
+
+app.post('/notifications', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (!['teacher', 'admin'].includes(currentUser.userRow.role)) {
+      return res.status(403).json({ error: 'Teacher or admin access required' });
+    }
+
+    const { recipient_email, subject, type, message } = req.body;
+    if (!recipient_email || !subject || !type) {
+      return res.status(400).json({ error: 'recipient_email, subject, and type are required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('email_notifications')
+      .insert({
+        user_id: currentUser.authUser.id,
+        recipient_email: recipient_email.toLowerCase(),
+        subject,
+        type,
+        message,
+        sent: false,
+      })
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ notification: data });
+  } catch (error) {
+    console.error('create notification error', error);
+    return res.status(500).json({ error: 'Unable to create notification' });
+  }
+});
+
+app.get('/articles', async (req, res) => {
+  try {
+    const roomId = req.query.room_id as string | undefined;
+    let query = supabaseAdmin.from('articles').select('*');
+    if (roomId) query = query.eq('room_id', roomId);
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ articles: data });
+  } catch (error) {
+    console.error('fetch articles error', error);
+    return res.status(500).json({ error: 'Unable to fetch articles' });
+  }
+});
+
+app.post('/articles', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (!['teacher', 'admin'].includes(currentUser.userRow.role)) {
+      return res.status(403).json({ error: 'Teacher or admin access required' });
+    }
+
+    const { title, content, file_url, room_id } = req.body;
+    if (!title) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('articles')
+      .insert({
+        title,
+        content,
+        file_url,
+        room_id,
+        created_by: currentUser.authUser.id,
+      })
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ article: data });
+  } catch (error) {
+    console.error('create article error', error);
+    return res.status(500).json({ error: 'Unable to create article' });
+  }
+});
+
+app.get('/events', async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('scheduled_events')
+      .select('*')
+      .order('event_date', { ascending: true });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ events: data });
+  } catch (error) {
+    console.error('fetch events error', error);
+    return res.status(500).json({ error: 'Unable to fetch events' });
+  }
+});
+
+app.post('/events', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (!['teacher', 'admin'].includes(currentUser.userRow.role)) {
+      return res.status(403).json({ error: 'Teacher or admin access required' });
+    }
+
+    const { title, description, event_date, event_type, room_id, recurrence } = req.body;
+    if (!title || !event_date) {
+      return res.status(400).json({ error: 'Title and event date are required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('scheduled_events')
+      .insert({
+        creator_id: currentUser.authUser.id,
+        title,
+        description,
+        event_date,
+        event_type,
+        room_id,
+        recurrence,
+      })
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ event: data });
+  } catch (error) {
+    console.error('create event error', error);
+    return res.status(500).json({ error: 'Unable to create event' });
+  }
+});
+
+app.get('/certificates', async (req, res) => {
+  try {
+    const studentId = req.query.student_id as string | undefined;
+    let query = supabaseAdmin.from('certificates').select('*');
+    if (studentId) query = query.eq('student_id', studentId);
+    const { data, error } = await query.order('issued_at', { ascending: false });
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ certificates: data });
+  } catch (error) {
+    console.error('fetch certificates error', error);
+    return res.status(500).json({ error: 'Unable to fetch certificates' });
+  }
+});
+
+app.post('/certificates', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (!['teacher', 'admin'].includes(currentUser.userRow.role)) {
+      return res.status(403).json({ error: 'Teacher or admin access required' });
+    }
+
+    const { student_id, course_id, title, certificate_url } = req.body;
+    if (!student_id || !title) {
+      return res.status(400).json({ error: 'Student ID and title are required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('certificates')
+      .insert({
+        student_id,
+        course_id,
+        title,
+        issued_by: currentUser.authUser.id,
+        certificate_url,
+      })
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ certificate: data });
+  } catch (error) {
+    console.error('create certificate error', error);
+    return res.status(500).json({ error: 'Unable to create certificate' });
+  }
+});
+
+app.get('/recordings', async (req, res) => {
+  try {
+    const roomId = req.query.room_id as string | undefined;
+    let query = supabaseAdmin.from('session_recordings').select('*');
+    if (roomId) query = query.eq('room_id', roomId);
+    const { data, error } = await query.order('recorded_at', { ascending: false });
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ recordings: data });
+  } catch (error) {
+    console.error('fetch recordings error', error);
+    return res.status(500).json({ error: 'Unable to fetch recordings' });
+  }
+});
+
+app.post('/recordings', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (!['teacher', 'admin'].includes(currentUser.userRow.role)) {
+      return res.status(403).json({ error: 'Teacher or admin access required' });
+    }
+
+    const { room_id, recording_url, duration_seconds } = req.body;
+    if (!room_id || !recording_url) {
+      return res.status(400).json({ error: 'Room id and recording url are required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('session_recordings')
+      .insert({
+        room_id,
+        recording_url,
+        duration_seconds,
+        recorded_by: currentUser.authUser.id,
+      })
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ recording: data });
+  } catch (error) {
+    console.error('create recording error', error);
+    return res.status(500).json({ error: 'Unable to create recording' });
+  }
+});
+
+app.get('/direct-messages', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const peerId = req.query.peer_id as string | undefined;
+    let query = supabaseAdmin
+      .from('direct_messages')
+      .select('*')
+      .or(`sender_id.eq.${currentUser.authUser.id},recipient_id.eq.${currentUser.authUser.id}`)
+      .order('created_at', { ascending: true });
+
+    if (peerId) {
+      query = supabaseAdmin
+        .from('direct_messages')
+        .select('*')
+        .or(
+          `and(sender_id.eq.${currentUser.authUser.id},recipient_id.eq.${peerId}),and(sender_id.eq.${peerId},recipient_id.eq.${currentUser.authUser.id})`
+        )
+        .order('created_at', { ascending: true });
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ messages: data });
+  } catch (error) {
+    console.error('fetch direct messages error', error);
+    return res.status(500).json({ error: 'Unable to fetch direct messages' });
+  }
+});
+
+app.post('/direct-messages', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { recipient_id, message } = req.body;
+    if (!recipient_id || !message) {
+      return res.status(400).json({ error: 'Recipient and message are required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('direct_messages')
+      .insert({ sender_id: currentUser.authUser.id, recipient_id, message })
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ message: data });
+  } catch (error) {
+    console.error('create direct message error', error);
+    return res.status(500).json({ error: 'Unable to create message' });
+  }
+});
+
+app.get('/parent-relations', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('parent_students')
+      .select('*, student:student_id(id, email, full_name), parent:parent_id(id, email, full_name)')
+      .or(`parent_id.eq.${currentUser.authUser.id},student_id.eq.${currentUser.authUser.id}`);
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ relations: data });
+  } catch (error) {
+    console.error('fetch parent relations error', error);
+    return res.status(500).json({ error: 'Unable to fetch parent relations' });
+  }
+});
+
+app.post('/parent-relations', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { parent_id, student_id, relationship, verified } = req.body;
+    if (!parent_id || !student_id) {
+      return res.status(400).json({ error: 'Parent and student IDs are required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('parent_students')
+      .insert({ parent_id, student_id, relationship, verified: !!verified })
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ relation: data });
+  } catch (error) {
+    console.error('create parent relation error', error);
+    return res.status(500).json({ error: 'Unable to create relation' });
+  }
+});
+
+app.get('/announcements', async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('announcements')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ announcements: data });
+  } catch (error) {
+    console.error('fetch announcements error', error);
+    return res.status(500).json({ error: 'Unable to fetch announcements' });
+  }
+});
+
+app.post('/announcements', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    if (!['teacher', 'admin'].includes(currentUser.userRow.role)) {
+      return res.status(403).json({ error: 'Teacher or admin access required' });
+    }
+
+    const { title, message, audience, pinned } = req.body;
+    if (!title || !message) {
+      return res.status(400).json({ error: 'Title and message are required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('announcements')
+      .insert({
+        title,
+        message,
+        created_by: currentUser.authUser.id,
+        audience: audience || 'all',
+        pinned: !!pinned,
+      })
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ announcement: data });
+  } catch (error) {
+    console.error('create announcement error', error);
+    return res.status(500).json({ error: 'Unable to create announcement' });
+  }
+});
+
+app.get('/teacher-reviews', async (req, res) => {
+  try {
+    const teacherId = req.query.teacher_id as string | undefined;
+    let query = supabaseAdmin.from('teacher_reviews').select('*');
+    if (teacherId) query = query.eq('teacher_id', teacherId);
+    const { data, error } = await query.order('created_at', { ascending: false });
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ reviews: data });
+  } catch (error) {
+    console.error('fetch teacher reviews error', error);
+    return res.status(500).json({ error: 'Unable to fetch reviews' });
+  }
+});
+
+app.post('/teacher-reviews', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { teacher_id, rating, review } = req.body;
+    if (!teacher_id || !rating) {
+      return res.status(400).json({ error: 'Teacher ID and rating are required' });
+    }
+    if (currentUser.userRow.role !== 'student') {
+      return res.status(403).json({ error: 'Only students can submit reviews' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('teacher_reviews')
+      .insert({
+        teacher_id,
+        student_id: currentUser.authUser.id,
+        rating,
+        review,
+      })
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+    return res.json({ review: data });
+  } catch (error) {
+    console.error('create teacher review error', error);
+    return res.status(500).json({ error: 'Unable to create teacher review' });
+  }
+});
+
+app.post('/twofactor/request', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+    const { data, error } = await supabaseAdmin
+      .from('two_factor_codes')
+      .insert({ user_id: currentUser.authUser.id, code, expires_at: expiresAt })
+      .single();
+
+    if (error) {
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ code: code, expires_at: expiresAt, note: 'Use this code to complete 2FA verification. In production, send it via email or SMS.' });
+  } catch (error) {
+    console.error('twofactor request error', error);
+    return res.status(500).json({ error: 'Unable to request two-factor code' });
+  }
+});
+
+app.post('/twofactor/verify', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { code } = req.body;
+    if (!code) {
+      return res.status(400).json({ error: 'Code is required' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('two_factor_codes')
+      .select('*')
+      .eq('user_id', currentUser.authUser.id)
+      .eq('code', code)
+      .eq('used', false)
+      .single();
+
+    if (error || !data) {
+      return res.status(400).json({ error: 'Invalid or expired code' });
+    }
+
+    if (new Date(data.expires_at) < new Date()) {
+      return res.status(400).json({ error: 'Two-factor code expired' });
+    }
+
+    const { error: updateError } = await supabaseAdmin
+      .from('two_factor_codes')
+      .update({ used: true })
+      .eq('id', data.id);
+
+    if (updateError) {
+      return res.status(500).json({ error: updateError.message });
+    }
+
+    return res.json({ verified: true });
+  } catch (error) {
+    console.error('twofactor verify error', error);
+    return res.status(500).json({ error: 'Unable to verify two-factor code' });
   }
 });
 

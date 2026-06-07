@@ -38,6 +38,9 @@ export default function TeacherPage() {
   const [newRoomDescription, setNewRoomDescription] = useState("");
   const [assignmentForms, setAssignmentForms] = useState<Record<string, AssignmentFormState>>({});
   const [assignmentActiveRoom, setAssignmentActiveRoom] = useState<string | null>(null);
+  const [recordingForms, setRecordingForms] = useState<Record<string, { recording_url: string; duration: string }>>({});
+  const [recordingActiveRoom, setRecordingActiveRoom] = useState<string | null>(null);
+  const [recordingsByRoom, setRecordingsByRoom] = useState<Record<string, Array<{ id: string; recording_url: string; duration_seconds: number | null; created_at: string }>>>({});
   const [questions, setQuestions] = useState<QuestionRecord[]>([]);
   const [answerDrafts, setAnswerDrafts] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
@@ -60,8 +63,12 @@ export default function TeacherPage() {
         .eq("id", session.user.id)
         .single();
 
-      if (userData?.role !== "teacher" && userData?.role !== "admin") {
-        navigate("/login");
+      if (userData?.role === "admin") {
+        navigate("/admin");
+        return;
+      }
+      if (userData?.role !== "teacher") {
+        navigate("/student");
         return;
       }
 
@@ -84,6 +91,18 @@ export default function TeacherPage() {
           .in("room_id", roomIds)
           .order("created_at", { ascending: false });
         setQuestions(questionData || []);
+
+        const { data: recordingData } = await supabase
+          .from('session_recordings')
+          .select('*')
+          .in('room_id', roomIds)
+          .order('recorded_at', { ascending: false });
+
+        const recordingMap: Record<string, Array<{ id: string; recording_url: string; duration_seconds: number | null; created_at: string }>> = {};
+        (recordingData || []).forEach((recording: any) => {
+          recordingMap[recording.room_id] = [...(recordingMap[recording.room_id] || []), recording];
+        });
+        setRecordingsByRoom(recordingMap);
       }
 
       await loadPendingStudents();
@@ -221,6 +240,59 @@ export default function TeacherPage() {
       [roomId]: { title: "", description: "", file_url: "", due_date: "" },
     }));
     setAssignmentActiveRoom(null);
+  };
+
+  const handleCreateRecording = async (roomId: string) => {
+    const form = recordingForms[roomId];
+    if (!form?.recording_url?.trim()) {
+      setError("Replay URL is required.");
+      return;
+    }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      navigate("/login");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/recordings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          room_id: roomId,
+          recording_url: form.recording_url.trim(),
+          duration_seconds: form.duration ? Number(form.duration) : null,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        setError(result.error || 'Unable to upload replay.');
+        return;
+      }
+
+      setMessage('Replay uploaded successfully.');
+      setRecordingForms((prev) => ({
+        ...prev,
+        [roomId]: { recording_url: '', duration: '' },
+      }));
+      setRecordingActiveRoom(null);
+      const { data: recordingData } = await supabase
+        .from('session_recordings')
+        .select('*')
+        .eq('room_id', roomId)
+        .order('recorded_at', { ascending: false });
+
+      const recordingMap = { ...(recordingsByRoom || {}) };
+      recordingMap[roomId] = recordingData || [];
+      setRecordingsByRoom(recordingMap);
+    } catch (err) {
+      console.error(err);
+      setError('Unable to upload replay.');
+    }
   };
 
   const handleAnswerQuestion = async (questionId: string, answer: string) => {
@@ -384,7 +456,14 @@ export default function TeacherPage() {
                       className="inline-flex items-center gap-2 rounded-3xl bg-blue-600 px-4 py-3 text-white hover:bg-blue-700"
                       onClick={() => setAssignmentActiveRoom(session.id === assignmentActiveRoom ? null : session.id)}
                     >
-                      <UploadCloud size={18} /> Upload
+                      <UploadCloud size={18} /> Upload Assignment
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-3xl bg-purple-600 px-4 py-3 text-white hover:bg-purple-700"
+                      onClick={() => setRecordingActiveRoom(session.id === recordingActiveRoom ? null : session.id)}
+                    >
+                      <Play size={18} /> Upload Replay
                     </button>
                   </div>
                 </div>
@@ -472,6 +551,80 @@ export default function TeacherPage() {
                     </button>
                   </div>
                 )}
+
+                {recordingActiveRoom === session.id && (
+                  <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-6">
+                    <h4 className="text-lg font-semibold text-slate-900">Upload replay for this session</h4>
+                    <div className="grid gap-4 mt-4 md:grid-cols-2">
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-slate-700">Replay URL</label>
+                        <input
+                          type="url"
+                          value={recordingForms[session.id]?.recording_url || ''}
+                          onChange={(event) =>
+                            setRecordingForms((prev) => ({
+                              ...prev,
+                              [session.id]: {
+                                ...(prev[session.id] || { duration: '' }),
+                                recording_url: event.target.value,
+                              },
+                            }))
+                          }
+                          className="mt-2 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-purple-500"
+                          placeholder="https://example.com/replay.mp4"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700">Duration (seconds)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={recordingForms[session.id]?.duration || ''}
+                          onChange={(event) =>
+                            setRecordingForms((prev) => ({
+                              ...prev,
+                              [session.id]: {
+                                ...(prev[session.id] || { recording_url: '' }),
+                                duration: event.target.value,
+                              },
+                            }))
+                          }
+                          className="mt-2 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 outline-none focus:border-purple-500"
+                          placeholder="120"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCreateRecording(session.id)}
+                      className="mt-4 inline-flex items-center gap-2 rounded-3xl bg-purple-600 px-5 py-3 text-white hover:bg-purple-500"
+                    >
+                      <Play size={18} /> Save Replay
+                    </button>
+                  </div>
+                )}
+
+                <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-6">
+                  <h4 className="text-lg font-semibold text-slate-900">Session replays</h4>
+                  {recordingsByRoom[session.id]?.length ? (
+                    <div className="mt-4 space-y-3">
+                      {recordingsByRoom[session.id].map((recording) => (
+                        <a
+                          key={recording.id}
+                          href={recording.recording_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-between rounded-3xl border border-purple-200 bg-white px-4 py-3 hover:bg-purple-50"
+                        >
+                          <span className="font-medium text-purple-900">Replay recorded on {new Date(recording.created_at).toLocaleDateString()}</span>
+                          <span className="text-sm text-purple-600">{recording.duration_seconds ? `${recording.duration_seconds}s` : 'View'}</span>
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-4 text-sm text-slate-600">No replays have been uploaded for this session yet.</p>
+                  )}
+                </div>
 
                 <div className="mt-6 space-y-4">
                   <h4 className="text-lg font-semibold text-slate-900">Student questions</h4>

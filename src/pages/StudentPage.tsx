@@ -23,6 +23,7 @@ export default function StudentPage() {
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
   const [assignmentsByRoom, setAssignmentsByRoom] = useState<Record<string, AssignmentRecord[]>>({});
+  const [recordingsByRoom, setRecordingsByRoom] = useState<Record<string, Array<{ id: string; recording_url: string; duration_seconds: number | null; recorded_at: string }>>>({});
   const [email, setEmail] = useState("");
   const [questionRoom, setQuestionRoom] = useState<string | null>(null);
   const [questionText, setQuestionText] = useState("");
@@ -45,9 +46,23 @@ export default function StudentPage() {
 
       const { data: userData } = await supabase
         .from("users")
-        .select("approved")
+        .select("approved, role")
         .eq("id", session.user.id)
         .single();
+
+      if (userData?.role === "admin") {
+        navigate("/admin");
+        return;
+      }
+      if (userData?.role === "teacher") {
+        navigate("/teacher");
+        return;
+      }
+      if (userData?.role !== "student") {
+        navigate("/login");
+        return;
+      }
+
       setIsApproved(!!userData?.approved);
 
       const { data } = await supabase
@@ -72,7 +87,19 @@ export default function StudentPage() {
           assignmentMap[roomId] = [...(assignmentMap[roomId] || []), assignment];
         });
 
+        const { data: recordingData } = await supabase
+          .from('session_recordings')
+          .select('*')
+          .in('room_id', roomIds)
+          .order('recorded_at', { ascending: false });
+
+        const recordingMap: Record<string, Array<{ id: string; recording_url: string; duration_seconds: number | null; recorded_at: string }>> = {};
+        (recordingData || []).forEach((recording: any) => {
+          recordingMap[recording.room_id] = [...(recordingMap[recording.room_id] || []), recording];
+        });
+
         setAssignmentsByRoom(assignmentMap);
+        setRecordingsByRoom(recordingMap);
       }
 
       setLoading(false);
@@ -80,14 +107,6 @@ export default function StudentPage() {
 
     init();
   }, [navigate]);
-
-  const handleJoinSession = (roomName: string) => {
-    if (!isApproved) {
-      setError('Your student account is pending teacher approval. You cannot join classes until approved.');
-      return;
-    }
-    navigate(`/classroom?room=${roomName}`);
-  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -157,6 +176,10 @@ export default function StudentPage() {
     setMessage("Assignment submitted successfully.");
     setSubmissionUrl("");
     setSubmissionRoom(null);
+  };
+
+  const handleJoinSession = (roomName: string) => {
+    navigate(`/classroom?room=${roomName}`);
   };
 
   if (loading) {
@@ -251,6 +274,27 @@ export default function StudentPage() {
                       )}
                     </div>
                   </div>
+                </div>
+                <div className="mt-6 rounded-3xl border border-slate-200 bg-white p-6">
+                  <h3 className="text-lg font-semibold text-gray-900">Class Replays</h3>
+                  {recordingsByRoom[session.id]?.length ? (
+                    <div className="mt-4 space-y-3">
+                      {recordingsByRoom[session.id].map((recording) => (
+                        <a
+                          key={recording.id}
+                          href={recording.recording_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center justify-between rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 hover:bg-slate-100"
+                        >
+                          <span className="font-medium text-slate-900">Replay from {new Date(recording.recorded_at).toLocaleDateString()}</span>
+                          <span className="text-sm text-slate-500">{recording.duration_seconds ? `${recording.duration_seconds}s` : 'Watch'}</span>
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-4 text-sm text-slate-500">No session replays available yet.</p>
+                  )}
                 </div>
 
                 {questionRoom === session.id && (

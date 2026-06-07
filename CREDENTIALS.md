@@ -3,19 +3,25 @@
 ## 📋 Sample Login Credentials
 
 ### 🔐 Admin Account
-- **Email:** `admin@dcons.local`
-- **Password:** `Admin@Dcons123`
+
+- **Email:** `dcon@admin.com`
+- **Password:** `admindcon1232`
 - **Role:** Administrator (full access to admin dashboard)
 - **Features:** Create teachers, view all users, approve students, manage system
 
 ### 👨‍🏫 Teacher Account
-- **Email:** `teacher@dcons.local`
-- **Password:** `Teacher@Dcons123`
+
+- **Email:** `constitency@teacher.com`
+- **Password:** `consistence1232`
 - **Role:** Teacher (approved by default)
 - **Name:** Prof. James Smith
 - **Features:** View classroom, manage students, approve student requests, upload materials
 
 ### 👤 Student Accounts (Require Teacher Approval)
+
+- **Self signup:** Only students may sign up through the public form.
+- **Admin/teacher accounts:** Must be created by an existing admin user.
+
 1. **Student 1**
    - **Email:** `student1@dcons.local`
    - **Password:** `Student@Dcons123`
@@ -27,6 +33,11 @@
    - **Name:** Bob Wilson
 
 3. **Student 3**
+   - **Email:** `dcon@student.com`
+   - **Password:** `student1232`
+   - **Name:** DCONS Student
+
+4. **Student 3**
    - **Email:** `student3@dcons.local`
    - **Password:** `Student@Dcons123`
    - **Name:** Charlie Davis
@@ -45,6 +56,7 @@ npm run seed:samples
 ```
 
 This will create:
+
 - Admin account (auto-approved)
 - 1 Teacher account (auto-approved)
 - 3 Student accounts (pending approval)
@@ -54,13 +66,15 @@ This will create:
 ## 🎯 Current Features
 
 ### ✅ Authentication
+
 - Email/password login
 - User roles: Admin, Teacher, Student
 - Session management with Supabase Auth
 
 ### ✅ Admin Dashboard
+
 - **Overview Tab:** System statistics (total users, active rooms, messages, assignments)
-- **Teachers Tab:** 
+- **Teachers Tab:**
   - View all teachers
   - Create new teachers with email/password
   - Enable/disable teacher accounts
@@ -68,17 +82,20 @@ This will create:
 - **Students Tab:** Placeholder for student management
 
 ### ✅ Student Management
+
 - Student signup with teacher assignment
 - Approval workflow (students need teacher approval before class access)
 - Teacher approval interface
 - Join class button disabled until approved
 
 ### ✅ Teacher Dashboard
+
 - View and approve pending students
 - Manage classroom sessions
 - Monitor student access
 
 ### ✅ Live Classroom
+
 - Real-time video/audio with MediaSoup
 - Socket.IO for communication
 - Whiteboard functionality
@@ -86,6 +103,7 @@ This will create:
 - Role-based permissions (teacher vs student)
 
 ### ✅ Teacher Booking System
+
 - Browse available teachers
 - Book lessons by date/subject
 - No-teacher messaging when unavailable
@@ -95,23 +113,27 @@ This will create:
 ## 💡 Suggested New Features
 
 ### 1. **Assignment Management**
+
 - Create and distribute assignments
 - Submit assignments with file upload
 - Grade submissions with comments
 - Track assignment completion
 
 ### 2. **Attendance Tracking**
+
 - Auto-record class attendance
 - Generate attendance reports
 - Monthly attendance summaries per student
 
 ### 3. **Progress Analytics**
+
 - Student performance dashboard
 - Class participation metrics
 - Assignment grades tracking
 - Time spent in classroom
 
 ### 4. **Notification System**
+
 - Email notifications for:
   - New assignment
   - Class start reminders
@@ -120,55 +142,65 @@ This will create:
 - In-app notifications
 
 ### 5. **Content Management**
+
 - Upload class materials (PDFs, slides, videos)
 - Organize by subject/date
 - Student access control
 - Download history
 
 ### 6. **Scheduling & Timetable**
+
 - Teacher weekly schedule
 - Student view of available slots
 - Calendar integration
 - Recurring classes
 
 ### 7. **Certificate System**
+
 - Generate completion certificates
 - Course certificates with grade
 - Download/share certificates
 
 ### 8. **Student Performance Reports**
+
 - Monthly progress reports
 - Attendance breakdown
 - Assignment grades summary
 - Teacher comments
 
 ### 9. **Instant Chat**
+
 - 1-on-1 messaging between students and teachers
 - Group chat for classes
 - File sharing in chat
 - Chat history
 
 ### 10. **Parent Portal** (if applicable)
+
 - Parent accounts to monitor child
 - View grades and attendance
 - Receive notifications
 - Communication with teachers
 
 ### 11. **Announcement Board**
+
 - Post class announcements
 - Schedule-based announcements
 - Important updates for students
 
 ### 12. **Rating & Reviews**
+
 - Student rate teachers
 - Teacher get feedback
 - Public teacher reviews (optional)
 
 ### 13. **Two-Factor Authentication**
+
 - Optional 2FA for admin/teachers
 - Email OTP verification
 
 ### 14. **Session Recording**
+
 - Record classroom sessions
 - Playback for absent students
 - Download recordings
@@ -178,13 +210,16 @@ This will create:
 ## 📝 Getting Started
 
 ### First Time Setup:
+
 1. **Create Admin Account:**
+
    ```bash
    cd backend
    npm run seed:admin
    ```
 
 2. **Create Sample Users:**
+
    ```bash
    npm run seed:samples
    ```
@@ -210,6 +245,7 @@ This will create:
 ## 🔄 Development Notes
 
 ### Backend API Endpoints:
+
 - `POST /admin/teachers` - Create new teacher
 - `GET /admin/teachers` - List all teachers
 - `GET /students/pending` - Get pending student approvals
@@ -217,6 +253,7 @@ This will create:
 - `GET /admin/requests` - Get join requests
 
 ### Frontend Routes:
+
 - `/login` - Login page
 - `/signup` - Student signup
 - `/admin` - Admin dashboard
