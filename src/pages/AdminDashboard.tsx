@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import { clearLocalAuth, getLocalAuth } from "../lib/localAuth";
 import { LogOut, Users, BookOpen, BarChart3, Plus, Trash2, Eye, EyeOff, CalendarDays, MessageCircle, FileText, UserPlus, ClipboardList } from "lucide-react";
 
 interface Stats {
@@ -55,40 +54,38 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const localUser = getLocalAuth();
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        if (!localUser || localUser.role !== "admin") {
-          navigate("/login");
-          return;
-        }
-
-        setLoading(false);
+        navigate("/login");
         return;
       }
 
-      const { data: userData } = await supabase
+      const { data: userData, error: userError } = await supabase
         .from("users")
         .select("role")
         .eq("id", session.user.id)
         .single();
 
-      if (userData?.role === "teacher") {
+      if (userError || !userData?.role) {
+        navigate("/login");
+        return;
+      }
+
+      if (userData.role === "teacher") {
         navigate("/teacher");
         return;
       }
-      if (userData?.role === "student") {
+      if (userData.role === "student") {
         navigate("/student");
         return;
       }
-      if (userData?.role !== "admin") {
+      if (userData.role !== "admin") {
         navigate("/login");
         return;
       }
 
       setToken(session.access_token);
 
-      // Fetch stats
       const [usersRes, roomsRes, messagesRes, assignmentsRes] = await Promise.all([
         supabase.from("users").select("id", { count: "exact" }),
         supabase.from("classroom_sessions").select("id", { count: "exact" }).eq("status", "active"),
@@ -103,12 +100,11 @@ export default function AdminDashboard() {
         totalAssignments: assignmentsRes.count || 0,
       });
 
-      // Fetch admin resources
       await Promise.all([
         fetchTeachers(session.access_token),
         fetchStudents(),
         fetchBookings(),
-        fetchEvents(),
+        fetchEvents(session.access_token),
         fetchArticles(),
       ]);
 
@@ -173,10 +169,10 @@ export default function AdminDashboard() {
     }
   };
 
-  const fetchEvents = async () => {
+  const fetchEvents = async (accessToken: string) => {
     try {
       const response = await fetch(`${API_URL}/events`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       const data = await response.json();
       if (response.ok) {
@@ -320,7 +316,7 @@ export default function AdminDashboard() {
 
       setActionMessage('Teacher calendar event created successfully.');
       setNewEvent({ title: '', description: '', event_date: '', event_type: 'class', room_id: '', recurrence: '' });
-      await fetchEvents();
+      await fetchEvents(token);
     } catch (error) {
       setActionMessage('Failed to create event');
       console.error(error);
@@ -372,7 +368,7 @@ export default function AdminDashboard() {
     if (action === 'bookings') {
       await fetchBookings();
     } else if (action === 'teacherCalendar') {
-      await fetchEvents();
+      await fetchEvents(token);
     } else if (action === 'materials') {
       await fetchArticles();
     } else if (action === 'studentView') {
@@ -383,7 +379,6 @@ export default function AdminDashboard() {
   };
 
   const handleLogout = async () => {
-    clearLocalAuth();
     await supabase.auth.signOut();
     navigate("/login");
   };

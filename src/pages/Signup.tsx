@@ -130,6 +130,20 @@ export default function Signup() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (isMounted && session) {
+          const { data: userData } = await supabase
+            .from("users")
+            .select("role")
+            .eq("id", session.user.id)
+            .single();
+
+          if (userData?.role === "admin") {
+            navigate("/admin");
+            return;
+          }
+          if (userData?.role === "teacher") {
+            navigate("/teacher");
+            return;
+          }
           navigate("/student");
           return;
         }
@@ -165,7 +179,7 @@ export default function Signup() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [navigate]);
 
   const handleSignup = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -264,7 +278,7 @@ export default function Signup() {
       </div>
 
       <div className="relative mx-auto flex min-h-screen w-full max-w-6xl items-center justify-center p-4">
-        <div className="relative grid w-full gap-8 overflow-hidden rounded-[2rem] border border-white/10 bg-slate-900/95 px-6 py-8 shadow-2xl shadow-slate-950/40 backdrop-blur-xl md:grid-cols-[1.3fr_0.9fr]">
+        <div className="relative grid w-full gap-8 overflow-hidden rounded-4xl border border-white/10 bg-slate-900/95 px-6 py-8 shadow-2xl shadow-slate-950/40 backdrop-blur-xl md:grid-cols-[1.3fr_0.9fr]">
           <div className="space-y-6">
             <div className="space-y-4">
               <div className="inline-flex items-center gap-2 rounded-full bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-200 shadow-inner shadow-cyan-500/5">
@@ -441,7 +455,7 @@ export default function Signup() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full rounded-3xl bg-gradient-to-r from-cyan-500 to-indigo-600 px-6 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white shadow-lg shadow-cyan-500/20 transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full rounded-3xl bg-linear-to-r from-cyan-500 to-indigo-600 px-6 py-3 text-sm font-semibold uppercase tracking-[0.12em] text-white shadow-lg shadow-cyan-500/20 transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? "Creating account..." : "Sign up and book teacher"}
               </button>
