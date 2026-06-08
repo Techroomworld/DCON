@@ -18,17 +18,26 @@ async function seedAdmin() {
     });
 
     if (authError) {
-      if (authError.message.includes('already exists')) {
-        console.log('Admin user already exists, updating password...');
-        const { data: existingUsers } = await (supabaseAdmin.auth.admin as any).listUsers();
-        const existingUser = existingUsers?.users?.find((u: any) => u.email === adminEmail);
-        const userId = existingUser?.id;
-        if (!userId) {
-          throw new Error(`Could not find existing admin user ID for ${adminEmail}`);
+      // Handle email_exists error code (Supabase v2 API) or "already exists" message (v1)
+      const isEmailExists = (authError as any).code === 'email_exists' || authError.message.includes('already exists');
+      
+      if (isEmailExists) {
+        console.log(`✓ Admin user ${adminEmail} already exists. Updating password...`);
+        try {
+          const { data: existingUsers } = await (supabaseAdmin.auth.admin as any).listUsers();
+          const existingUser = existingUsers?.users?.find((u: any) => u.email === adminEmail);
+          const userId = existingUser?.id;
+          if (!userId) {
+            throw new Error(`Could not find existing admin user ID for ${adminEmail}`);
+          }
+          await (supabaseAdmin.auth.admin as any).updateUserById(userId, { password: adminPassword });
+          console.log(`✓ Admin password updated for existing user (${userId}).`);
+        } catch (updateError) {
+          console.warn(`⚠ Could not update admin password: ${(updateError as any).message || updateError}`);
+          console.log('  (This is safe to ignore if the password is already correct)');
         }
-        await (supabaseAdmin.auth.admin as any).updateUserById(userId, { password: adminPassword });
-        console.log('Admin password refreshed for existing user.');
       } else {
+        console.error(`✗ Auth error: ${authError.message}`);
         throw authError;
       }
     } else {
