@@ -10,6 +10,8 @@ export default function LoginDetails() {
   const [sessionInfo, setSessionInfo] = useState<any>(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     const getUser = async () => {
       try {
         const {
@@ -17,8 +19,10 @@ export default function LoginDetails() {
           error,
         } = await supabase.auth.getUser();
 
+        if (!isMounted) return;
+
         if (error || !currentUser) {
-          navigate('/login');
+          navigate('/login', { replace: true });
           return;
         }
 
@@ -28,19 +32,27 @@ export default function LoginDetails() {
         const {
           data: { session },
         } = await supabase.auth.getSession();
-        if (session) {
+        if (isMounted && session) {
           setSessionInfo(session);
         }
       } catch (err) {
         console.error('Error fetching user:', err);
-        navigate('/login');
+        if (isMounted) {
+          navigate('/login', { replace: true });
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     getUser();
-  }, [navigate]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
