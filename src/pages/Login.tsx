@@ -12,32 +12,39 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [authInitializing, setAuthInitializing] = useState(true);
 
+  const handleGoHome = () => navigate('/');
+
   useEffect(() => {
     let isMounted = true;
 
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (isMounted && session) {
-        const { data: userData } = await supabase
-          .from("users")
-          .select("role")
-          .eq("id", session.user.id)
-          .single();
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (isMounted && session) {
+          const { data: userData } = await supabase
+            .from("users")
+            .select("role")
+            .eq("id", session.user.id)
+            .single();
 
-        const role = userData?.role || "student";
-        if (role === "admin") {
-          navigate("/admin");
-        } else if (role === "teacher") {
-          navigate("/teacher");
-        } else {
-          navigate("/student");
+          const role = userData?.role || "student";
+          if (role === "admin") {
+            navigate("/admin");
+          } else if (role === "teacher") {
+            navigate("/teacher");
+          } else {
+            navigate("/student");
+          }
+        }
+      } catch (error) {
+        console.error("Login auth check failed:", error);
+      } finally {
+        if (isMounted) {
+          setAuthInitializing(false);
         }
       }
-      // mark initial auth check complete so pages don't redirect prematurely
-      if (isMounted) {
-        setAuthInitializing(false);
-      }
     };
+
     checkAuth();
 
     return () => {
@@ -115,18 +122,24 @@ export default function Login() {
     } catch (err) {
       setError("Failed to sign in with password");
     } finally {
-      // keep loading false here only if not handled by onAuthStateChange
-      if (!loading) setLoading(false);
+      setLoading(false);
     }
   };
 
   if (authInitializing) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="rounded-3xl bg-slate-900/90 border border-slate-700/50 p-10 shadow-2xl text-center">
+        <div className="rounded-3xl bg-slate-900/90 border border-slate-700/50 p-10 shadow-2xl text-center max-w-md">
           <Sparkles className="mx-auto mb-4 h-12 w-12 text-cyan-400 animate-float-edu" />
           <h2 className="text-2xl font-semibold text-white">Preparing your learning portal...</h2>
           <p className="mt-3 text-slate-300">Checking your authentication state before redirecting.</p>
+          <button
+            type="button"
+            onClick={handleGoHome}
+            className="mt-6 inline-flex items-center justify-center rounded-3xl border border-slate-700/80 bg-slate-950/80 px-5 py-3 text-sm font-semibold text-cyan-200 transition hover:bg-slate-900"
+          >
+            ← Back to Home
+          </button>
         </div>
       </div>
     );
@@ -218,6 +231,19 @@ export default function Login() {
                 <BookOpen className="h-4 w-4 text-indigo-300" />
                 Access learning resources and course downloads.
               </div>
+            </div>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 text-sm text-slate-300">
+              <div className="flex items-center gap-2 text-slate-400">
+                <Atom className="h-4 w-4 text-cyan-300" />
+                Secure Supabase authentication and class access.
+              </div>
+              <button
+                type="button"
+                onClick={handleGoHome}
+                className="rounded-3xl border border-slate-700/80 bg-slate-950/90 px-4 py-3 text-left text-sm text-cyan-200 hover:bg-slate-900"
+              >
+                ← Back to home
+              </button>
             </div>
             <div className="mt-8 text-center text-slate-400">
               <p>Don’t have an account?{' '}

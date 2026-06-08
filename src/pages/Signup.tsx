@@ -121,32 +121,41 @@ export default function Signup() {
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const handleGoHome = () => navigate('/');
+
   useEffect(() => {
     let isMounted = true;
 
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (isMounted && session) {
-        navigate("/student");
-        return;
-      }
-
-      const { data, error: teacherError } = await supabase
-        .from("users")
-        .select("id, email, full_name")
-        .eq("role", "teacher");
-
-      if (teacherError) {
-        if (isMounted) {
-          setError("Unable to load teachers.");
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (isMounted && session) {
+          navigate("/student");
+          return;
         }
-        return;
-      }
 
-      if (isMounted) {
-        setTeachers(data || []);
-        if (data && data.length > 0) {
-          setTeacherId(data[0].id);
+        const { data, error: teacherError } = await supabase
+          .from("users")
+          .select("id, email, full_name")
+          .eq("role", "teacher");
+
+        if (teacherError) {
+          if (isMounted) {
+            setError("Unable to load teachers.");
+          }
+          return;
+        }
+
+        if (isMounted) {
+          setTeachers(data || []);
+          if (data && data.length > 0) {
+            setTeacherId(data[0].id);
+          }
+        }
+      } catch (err) {
+        console.error("Signup auth check failed:", err);
+        if (isMounted) {
+          setError("Unable to verify your session. Please try again.");
         }
       }
     };
@@ -261,10 +270,21 @@ export default function Signup() {
               <div className="inline-flex items-center gap-2 rounded-full bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-200 shadow-inner shadow-cyan-500/5">
                 <Sparkles className="h-4 w-4" /> Explore your perfect course and teacher match.
               </div>
-              <h1 className="text-4xl font-extrabold tracking-tight text-white">Create your student account</h1>
-              <p className="max-w-2xl text-slate-300">
-                Book expert teachers, discover new classes, and download digital marketing resources, past questions, and e-books for every subject.
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h1 className="text-4xl font-extrabold tracking-tight text-white">Create your student account</h1>
+                  <p className="max-w-2xl text-slate-300">
+                    Book expert teachers, discover new classes, and download digital marketing resources, past questions, and e-books for every subject.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGoHome}
+                  className="rounded-3xl border border-slate-700/80 bg-slate-950/90 px-4 py-3 text-sm font-medium text-cyan-200 hover:bg-slate-900"
+                >
+                  ← Back to home
+                </button>
+              </div>
             </div>
 
             {error && (
