@@ -6,6 +6,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import TeacherPage from "./pages/TeacherPage";
 import StudentPage from "./pages/StudentPage";
 import ClassroomPage from "./pages/ClassroomPage";
+import Documents from "./pages/Documents";
 import "./styles/index.css";
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/documents" element={<Documents />} />
       <Route path="/admin" element={<AdminDashboard />} />
       <Route path="/teacher" element={<TeacherPage />} />
       <Route path="/student" element={<StudentPage />} />

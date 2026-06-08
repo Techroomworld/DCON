@@ -7,6 +7,8 @@ import {
   BarChart3,
   CalendarDays,
   CheckCircle2,
+  FileText,
+  BookOpen,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
@@ -145,6 +147,7 @@ export default function Home() {
             <a href="#about" className="hover:text-white">About</a>
             <a href="#contact" className="hover:text-white">Contact</a>
             <a href="/student" className="hover:text-white">Classroom</a>
+            <a href="/documents" className="hover:text-white">Resources</a>
           </div>
 
           <button
@@ -191,8 +194,12 @@ export default function Home() {
               className="border border-white px-10 py-4 rounded-2xl font-bold hover:bg-white/10"
             >
               Learn More
-            </a>
-          </div>
+            </a>            <button
+              onClick={() => navigate('/documents')}
+              className="border border-white/70 text-white px-10 py-4 rounded-2xl font-bold hover:bg-white/10"
+            >
+              <FileText className="w-5 h-5 mr-2 inline-block" /> Resources
+            </button>          </div>
         </div>
       </section>
 
