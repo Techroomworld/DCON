@@ -13,10 +13,11 @@ export default function Login() {
   const [authInitializing, setAuthInitializing] = useState(true);
 
   useEffect(() => {
-    // Check if already logged in
+    let isMounted = true;
+
     const checkAuth = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+      if (isMounted && session) {
         const { data: userData } = await supabase
           .from("users")
           .select("role")
@@ -33,10 +34,16 @@ export default function Login() {
         }
       }
       // mark initial auth check complete so pages don't redirect prematurely
-      setAuthInitializing(false);
+      if (isMounted) {
+        setAuthInitializing(false);
+      }
     };
     checkAuth();
-  }, [navigate]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();

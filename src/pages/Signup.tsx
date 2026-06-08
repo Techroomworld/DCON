@@ -122,9 +122,11 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
+      if (isMounted && session) {
         navigate("/student");
         return;
       }
@@ -135,18 +137,26 @@ export default function Signup() {
         .eq("role", "teacher");
 
       if (teacherError) {
-        setError("Unable to load teachers.");
+        if (isMounted) {
+          setError("Unable to load teachers.");
+        }
         return;
       }
 
-      setTeachers(data || []);
-      if (data && data.length > 0) {
-        setTeacherId(data[0].id);
+      if (isMounted) {
+        setTeachers(data || []);
+        if (data && data.length > 0) {
+          setTeacherId(data[0].id);
+        }
       }
     };
 
     init();
-  }, [navigate]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleSignup = async (event: React.FormEvent) => {
     event.preventDefault();
