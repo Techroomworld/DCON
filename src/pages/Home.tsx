@@ -150,10 +150,10 @@ export default function Home() {
           </div>
 
           <button
-            onClick={() => navigate("/documents")}
+            onClick={() => navigate("/login")}
             className="bg-indigo-600 hover:bg-indigo-700 px-6 py-2 rounded-xl font-semibold"
           >
-            Resources
+            Login
           </button>
         </div>
       </nav>

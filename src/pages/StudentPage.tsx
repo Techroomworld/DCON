@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { clearLocalAuth, getLocalAuth } from "../lib/localAuth";
 import { LogOut, Zap, MessageSquare, FileDown, Paperclip, Send } from "lucide-react";
 
 type SessionRecord = {
@@ -36,9 +37,18 @@ export default function StudentPage() {
 
   useEffect(() => {
     const init = async () => {
+      const localUser = getLocalAuth();
       const { data: { session } } = await supabase.auth.getSession();
+
       if (!session) {
-        navigate("/login");
+        if (!localUser || localUser.role !== "student") {
+          navigate("/login");
+          return;
+        }
+
+        setEmail(localUser.email || "");
+        setIsApproved(true);
+        setLoading(false);
         return;
       }
 
@@ -109,6 +119,7 @@ export default function StudentPage() {
   }, [navigate]);
 
   const handleLogout = async () => {
+    clearLocalAuth();
     await supabase.auth.signOut();
     navigate("/login");
   };

@@ -1,5 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
+import Login from "./pages/Login";
 import AuthDisabled from "./pages/AuthDisabled";
 import AdminDashboard from "./pages/AdminDashboard";
 import TeacherPage from "./pages/TeacherPage";
@@ -13,7 +14,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Home />} />
-      <Route path="/login" element={<AuthDisabled />} />
+      <Route path="/login" element={<Login />} />
       <Route path="/signup" element={<AuthDisabled />} />
       <Route path="/documents" element={<Documents />} />
       <Route path="/login-details" element={<LoginDetails />} />

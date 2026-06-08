@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { clearLocalAuth, getLocalAuth } from "../lib/localAuth";
 import { LogOut, Users, BookOpen, BarChart3, Plus, Trash2, Eye, EyeOff, CalendarDays, MessageCircle, FileText, UserPlus, ClipboardList } from "lucide-react";
 
 interface Stats {
@@ -54,9 +55,15 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const checkAuth = async () => {
+      const localUser = getLocalAuth();
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        navigate("/login");
+        if (!localUser || localUser.role !== "admin") {
+          navigate("/login");
+          return;
+        }
+
+        setLoading(false);
         return;
       }
 
@@ -376,6 +383,7 @@ export default function AdminDashboard() {
   };
 
   const handleLogout = async () => {
+    clearLocalAuth();
     await supabase.auth.signOut();
     navigate("/login");
   };

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { clearLocalAuth, getLocalAuth } from "../lib/localAuth";
 import { LogOut, Play, Plus, FileUp, UploadCloud, MessageSquare } from "lucide-react";
 
 type SessionRecord = {
@@ -51,9 +52,16 @@ export default function TeacherPage() {
 
   useEffect(() => {
     const init = async () => {
+      const localUser = getLocalAuth();
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        navigate("/login");
+        if (!localUser || localUser.role !== "teacher") {
+          navigate("/login");
+          return;
+        }
+
+        setEmail(localUser.email || "");
+        setLoading(false);
         return;
       }
 
@@ -113,6 +121,7 @@ export default function TeacherPage() {
   }, [navigate]);
 
   const handleLogout = async () => {
+    clearLocalAuth();
     await supabase.auth.signOut();
     navigate("/login");
   };
