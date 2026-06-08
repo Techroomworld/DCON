@@ -6,8 +6,10 @@ export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [authInitializing, setAuthInitializing] = useState(true);
 
   useEffect(() => {
     // Check if already logged in
@@ -29,6 +31,8 @@ export default function Login() {
           navigate("/student");
         }
       }
+      // mark initial auth check complete so pages don't redirect prematurely
+      setAuthInitializing(false);
     };
     checkAuth();
   }, [navigate]);
@@ -67,11 +71,44 @@ export default function Login() {
         } else {
           navigate("/student");
         }
+      } else {
+        // Some auth flows (redirects/magic links) may not provide a session immediately.
+        // Wait for auth state change once and then proceed.
+        const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (session) {
+            const { data: userData } = await supabase
+              .from("users")
+              .select("role, can_login")
+              .eq("id", session.user.id)
+              .single();
+
+            if (userData?.can_login === false) {
+              await supabase.auth.signOut();
+              setError("Your account is not yet permitted to sign in.");
+              listener.subscription.unsubscribe();
+              setLoading(false);
+              return;
+            }
+
+            const role = userData?.role || "student";
+            if (role === "admin") {
+              navigate("/admin");
+            } else if (role === "teacher") {
+              navigate("/teacher");
+            } else {
+              navigate("/student");
+            }
+
+            listener.subscription.unsubscribe();
+            setLoading(false);
+          }
+        });
       }
     } catch (err) {
       setError("Failed to sign in with password");
     } finally {
-      setLoading(false);
+      // keep loading false here only if not handled by onAuthStateChange
+      if (!loading) setLoading(false);
     }
   };
 
@@ -105,14 +142,23 @@ export default function Login() {
             <label className="block text-gray-700 font-semibold mb-2">
               Password
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Your password"
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Your password"
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm font-medium text-blue-600 hover:text-blue-800"
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
           </div>
           <button
             type="submit"
