@@ -11,6 +11,7 @@ export default function NavBar(){
           <Link to="/teacher" className="text-slate-300 hover:text-white">Teacher</Link>
           <Link to="/student" className="text-slate-300 hover:text-white">Student</Link>
           <Link to="/admin" className="text-slate-300 hover:text-white">Admin</Link>
+          <Link to="/login-details" className="text-slate-300 hover:text-white px-3 py-1 rounded bg-cyan-600 hover:bg-cyan-700">Account</Link>
         </nav>
       </div>
     </header>
