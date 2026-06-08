@@ -146,15 +146,14 @@ export default function Home() {
             <a href="#courses" className="hover:text-white">Courses</a>
             <a href="#about" className="hover:text-white">About</a>
             <a href="#contact" className="hover:text-white">Contact</a>
-            <a href="/student" className="hover:text-white">Classroom</a>
             <a href="/documents" className="hover:text-white">Resources</a>
           </div>
 
           <button
-            onClick={() => navigate("/login")}
+            onClick={() => navigate("/documents")}
             className="bg-indigo-600 hover:bg-indigo-700 px-6 py-2 rounded-xl font-semibold"
           >
-            Login
+            Resources
           </button>
         </div>
       </nav>
@@ -175,18 +174,11 @@ export default function Home() {
 
           <div className="flex flex-col sm:flex-row gap-6 justify-center">
             <button
-              onClick={() => navigate("/login")}
+              onClick={() => navigate("/documents")}
               className="bg-white text-slate-900 px-10 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:scale-105 transition"
             >
               <PlayCircle className="w-5 h-5 text-indigo-600 animate-pulse" />
-              Login to Portal
-            </button>
-
-            <button
-              onClick={() => navigate("/student")}
-              className="bg-slate-900/80 border border-white/20 text-white px-10 py-4 rounded-2xl font-bold hover:bg-slate-800 transition"
-            >
-              Open Student Portal
+              Browse Resources
             </button>
 
             <a
@@ -194,12 +186,8 @@ export default function Home() {
               className="border border-white px-10 py-4 rounded-2xl font-bold hover:bg-white/10"
             >
               Learn More
-            </a>            <button
-              onClick={() => navigate('/documents')}
-              className="border border-white/70 text-white px-10 py-4 rounded-2xl font-bold hover:bg-white/10"
-            >
-              <FileText className="w-5 h-5 mr-2 inline-block" /> Resources
-            </button>          </div>
+            </a>
+          </div>
         </div>
       </section>
 
