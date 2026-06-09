@@ -5,9 +5,35 @@ import { BookOpen, Sparkles, GraduationCap, Lightbulb, Atom, Eye, EyeOff } from 
 import { supabase } from "../lib/supabase";
 
 const DEFAULT_ADMIN_EMAIL = "dcon@admin.com";
+const API_URL = import.meta.env.VITE_BACKEND_URL || 'https://dcon-1.onrender.com';
 
 async function resolveUserRole(session: Session) {
   const email = session.user.email?.toLowerCase() || "";
+  const accessToken = session.access_token;
+
+  try {
+    const response = await fetch(`${API_URL}/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (response.ok) {
+      const json = await response.json();
+      if (json.error) {
+        return { role: null as string | null, error: new Error(json.error) };
+      }
+      if (json.role) {
+        return { role: json.role as string, error: null };
+      }
+      return { role: null as string | null, error: null };
+    }
+
+    const text = await response.text();
+    return { role: null as string | null, error: new Error(text || response.statusText) };
+  } catch (backendError) {
+    console.warn('Backend auth/me fallback failed:', backendError);
+  }
 
   const { data: userData, error: profileError } = await supabase
     .from("users")
@@ -23,7 +49,6 @@ async function resolveUserRole(session: Session) {
     return { role: userData.role, error: null };
   }
 
-  // No profile found, check if this is the admin account
   if (!userData && email === DEFAULT_ADMIN_EMAIL) {
     const { error: insertError } = await supabase.from("users").insert({
       id: session.user.id,

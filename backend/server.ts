@@ -33,6 +33,7 @@ const io = new SocketIOServer(server, {
 });
 
 const PORT = Number(process.env.PORT || 4000);
+const DEFAULT_ADMIN_EMAIL = 'dcon@admin.com';
 
 const workers: Worker[] = [];
 const rooms = new Map<string, RoomInfo>();
@@ -744,6 +745,64 @@ io.on('connection', (socket) => {
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+app.get('/auth/me', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+
+    if (!token) {
+      return res.status(401).json({ error: 'Authorization required' });
+    }
+
+    const authUser = await verifySupabaseToken(token);
+    if (!authUser) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+
+    const userEmail = authUser.email?.toLowerCase() || '';
+    const { data: userRow, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('id, email, role, admin_type, can_login, approved, full_name')
+      .eq('id', authUser.id)
+      .maybeSingle();
+
+    if (userError) {
+      console.error('auth/me profile lookup error:', userError);
+      return res.status(500).json({ error: userError.message || 'Error looking up user profile' });
+    }
+
+    let resolvedUser = userRow;
+    if (!resolvedUser && userEmail === DEFAULT_ADMIN_EMAIL) {
+      const { data: createdAdmin, error: insertError } = await supabaseAdmin
+        .from('users')
+        .insert({
+          id: authUser.id,
+          email: userEmail,
+          role: 'admin',
+          can_login: true,
+          approved: true,
+          full_name: 'DCONS Administrator',
+        })
+        .single();
+
+      if (insertError) {
+        console.error('auth/me admin profile creation error:', insertError);
+        return res.status(500).json({ error: 'Failed to create admin profile' });
+      }
+      resolvedUser = createdAdmin;
+    }
+
+    if (!resolvedUser) {
+      return res.json({ role: null, user: null });
+    }
+
+    return res.json({ role: resolvedUser.role, user: resolvedUser });
+  } catch (error) {
+    console.error('auth/me error:', error);
+    return res.status(500).json({ error: 'Unable to resolve user profile' });
+  }
 });
 
 // Check if a user (via token) has access to a named session/room
