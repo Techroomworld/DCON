@@ -13,7 +13,7 @@ async function resolveUserRole(session: Session) {
     .from("users")
     .select("role")
     .eq("id", session.user.id)
-    .single();
+    .maybeSingle();
 
   if (profileError) {
     return { role: null as string | null, error: profileError };
@@ -23,7 +23,8 @@ async function resolveUserRole(session: Session) {
     return { role: userData.role, error: null };
   }
 
-  if (email === DEFAULT_ADMIN_EMAIL) {
+  // No profile found, check if this is the admin account
+  if (!userData && email === DEFAULT_ADMIN_EMAIL) {
     const { error: insertError } = await supabase.from("users").insert({
       id: session.user.id,
       email,
