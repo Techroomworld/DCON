@@ -3,6 +3,8 @@
   publish = "dist"
 
 [build.environment]
+  VITE_SUPABASE_URL = "https://kkpkrrhqkzukurmoxrdq.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "sb_publishable_SL0dwF6XwKOrGCpvlqevQQ_8YbReH3h"
   VITE_BACKEND_URL = "https://dcon-1.onrender.com"
 
 [[redirects]]
