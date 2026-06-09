@@ -309,7 +309,14 @@ export default function Signup() {
 
             {success && (
               <div className="rounded-3xl bg-emerald-500/10 border border-emerald-400/30 p-4 text-emerald-100">
-                {success}
+                <div>{success}</div>
+                <button
+                  type="button"
+                  onClick={() => navigate("/login")}
+                  className="mt-4 inline-flex items-center justify-center rounded-3xl bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
+                >
+                  Go to Login
+                </button>
               </div>
             )}
 

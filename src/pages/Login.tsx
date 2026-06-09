@@ -1,7 +1,47 @@
 import { useEffect, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { useNavigate } from "react-router-dom";
 import { BookOpen, Sparkles, GraduationCap, Lightbulb, Atom, Eye, EyeOff } from "lucide-react";
 import { supabase } from "../lib/supabase";
+
+const DEFAULT_ADMIN_EMAIL = "dcon@admin.com";
+
+async function resolveUserRole(session: Session) {
+  const email = session.user.email?.toLowerCase() || "";
+
+  const { data: userData, error: profileError } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", session.user.id)
+    .single();
+
+  if (profileError) {
+    return { role: null as string | null, error: profileError };
+  }
+
+  if (userData?.role) {
+    return { role: userData.role, error: null };
+  }
+
+  if (email === DEFAULT_ADMIN_EMAIL) {
+    const { error: insertError } = await supabase.from("users").insert({
+      id: session.user.id,
+      email,
+      role: "admin",
+      can_login: true,
+      approved: true,
+      full_name: "DCONS Administrator",
+    });
+
+    if (insertError) {
+      return { role: null, error: insertError };
+    }
+
+    return { role: "admin", error: null };
+  }
+
+  return { role: null, error: null };
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -17,19 +57,12 @@ export default function Login() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const { data: userData, error: profileError } = await supabase
-        .from("users")
-        .select("role")
-        .eq("id", session.user.id)
-        .single();
+      const { role, error: profileError } = await resolveUserRole(session);
+      if (profileError || !role) return;
 
-      if (profileError || !userData?.role) {
-        return;
-      }
-
-      if (userData.role === "admin") {
+      if (role === "admin") {
         navigate("/admin");
-      } else if (userData.role === "teacher") {
+      } else if (role === "teacher") {
         navigate("/teacher");
       } else {
         navigate("/student");
@@ -72,21 +105,25 @@ export default function Login() {
       return;
     }
 
-    const { data: userData, error: profileError } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", session.user.id)
-      .single();
+    const { role, error: profileError } = await resolveUserRole(session);
 
-    if (profileError || !userData?.role) {
-      setError("Unable to determine your account role. Please contact support.");
+    if (profileError) {
+      setError("Unable to determine your account role. Please try again or contact support.");
       setLoading(false);
       return;
     }
 
-    if (userData.role === "admin") {
+    if (!role) {
+      setError(
+        "Your account exists, but your profile is not fully configured. Please contact support if this continues."
+      );
+      setLoading(false);
+      return;
+    }
+
+    if (role === "admin") {
       navigate("/admin");
-    } else if (userData.role === "teacher") {
+    } else if (role === "teacher") {
       navigate("/teacher");
     } else {
       navigate("/student");
