@@ -133,77 +133,6 @@ ALTER TABLE articles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE whiteboard_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE producers ENABLE ROW LEVEL SECURITY;
 
--- Drop policies first so the schema file can be rerun safely
-DROP POLICY IF EXISTS users_read ON public.users;
-DROP POLICY IF EXISTS users_insert ON public.users;
-DROP POLICY IF EXISTS users_update ON public.users;
-DROP POLICY IF EXISTS users_public_teacher_read ON public.users;
-
-DROP POLICY IF EXISTS sessions_read ON public.classroom_sessions;
-DROP POLICY IF EXISTS sessions_create ON public.classroom_sessions;
-DROP POLICY IF EXISTS sessions_update ON public.classroom_sessions;
-
-DROP POLICY IF EXISTS chat_read ON public.chat_messages;
-DROP POLICY IF EXISTS chat_insert ON public.chat_messages;
-
-DROP POLICY IF EXISTS attendance_read ON public.attendance;
-DROP POLICY IF EXISTS attendance_insert ON public.attendance;
-
-DROP POLICY IF EXISTS questions_read ON public.questions;
-DROP POLICY IF EXISTS questions_create ON public.questions;
-DROP POLICY IF EXISTS questions_update ON public.questions;
-
-DROP POLICY IF EXISTS assignments_create ON public.assignments;
-DROP POLICY IF EXISTS assignments_read ON public.assignments;
-
-DROP POLICY IF EXISTS submissions_create ON public.submissions;
-DROP POLICY IF EXISTS submissions_read ON public.submissions;
-
-DROP POLICY IF EXISTS session_access_manage ON public.session_access;
-
-DROP POLICY IF EXISTS join_requests_insert ON public.join_requests;
-DROP POLICY IF EXISTS join_requests_admin_read ON public.join_requests;
-DROP POLICY IF EXISTS join_requests_admin_update ON public.join_requests;
-
-DROP POLICY IF EXISTS teacher_bookings_insert ON public.teacher_bookings;
-DROP POLICY IF EXISTS teacher_bookings_select ON public.teacher_bookings;
-DROP POLICY IF EXISTS teacher_bookings_update ON public.teacher_bookings;
-
-DROP POLICY IF EXISTS reminders_insert ON public.reminders;
-DROP POLICY IF EXISTS reminders_read ON public.reminders;
-DROP POLICY IF EXISTS reminders_update ON public.reminders;
-
-DROP POLICY IF EXISTS email_notifications_insert ON public.email_notifications;
-DROP POLICY IF EXISTS email_notifications_read ON public.email_notifications;
-
-DROP POLICY IF EXISTS direct_messages_insert ON public.direct_messages;
-DROP POLICY IF EXISTS direct_messages_read ON public.direct_messages;
-
-DROP POLICY IF EXISTS grades_insert ON public.grades;
-DROP POLICY IF EXISTS grades_read ON public.grades;
-
-DROP POLICY IF EXISTS certificates_insert ON public.certificates;
-DROP POLICY IF EXISTS certificates_read ON public.certificates;
-
-DROP POLICY IF EXISTS session_recordings_insert ON public.session_recordings;
-DROP POLICY IF EXISTS session_recordings_read ON public.session_recordings;
-
-DROP POLICY IF EXISTS scheduled_events_insert ON public.scheduled_events;
-DROP POLICY IF EXISTS scheduled_events_read ON public.scheduled_events;
-
-DROP POLICY IF EXISTS parent_students_insert ON public.parent_students;
-DROP POLICY IF EXISTS parent_students_read ON public.parent_students;
-
-DROP POLICY IF EXISTS announcements_insert ON public.announcements;
-DROP POLICY IF EXISTS announcements_read ON public.announcements;
-DROP POLICY IF EXISTS announcements_update ON public.announcements;
-
-DROP POLICY IF EXISTS teacher_reviews_insert ON public.teacher_reviews;
-DROP POLICY IF EXISTS teacher_reviews_read ON public.teacher_reviews;
-
-DROP POLICY IF EXISTS two_factor_codes_insert ON public.two_factor_codes;
-DROP POLICY IF EXISTS two_factor_codes_read ON public.two_factor_codes;
-
 -- Users can read their own profile or if admin
 CREATE POLICY users_read ON users
   FOR SELECT USING (auth.uid() = id OR (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
@@ -590,4 +519,258 @@ CREATE INDEX IF NOT EXISTS idx_scheduled_events_creator_id ON scheduled_events(c
 CREATE INDEX IF NOT EXISTS idx_scheduled_events_event_date ON scheduled_events(event_date);
 CREATE INDEX IF NOT EXISTS idx_parent_students_parent_id ON parent_students(parent_id);
 CREATE INDEX IF NOT EXISTS idx_parent_students_student_id ON parent_students(student_id);
+
+-- Drop policies first so the schema file can be rerun safely
+DROP POLICY IF EXISTS users_read ON public.users;
+DROP POLICY IF EXISTS users_insert ON public.users;
+DROP POLICY IF EXISTS users_update ON public.users;
+DROP POLICY IF EXISTS users_public_teacher_read ON public.users;
+
+DROP POLICY IF EXISTS sessions_read ON public.classroom_sessions;
+DROP POLICY IF EXISTS sessions_create ON public.classroom_sessions;
+DROP POLICY IF EXISTS sessions_update ON public.classroom_sessions;
+
+DROP POLICY IF EXISTS chat_read ON public.chat_messages;
+DROP POLICY IF EXISTS chat_insert ON public.chat_messages;
+
+DROP POLICY IF EXISTS attendance_read ON public.attendance;
+DROP POLICY IF EXISTS attendance_insert ON public.attendance;
+
+DROP POLICY IF EXISTS questions_read ON public.questions;
+DROP POLICY IF EXISTS questions_create ON public.questions;
+DROP POLICY IF EXISTS questions_update ON public.questions;
+
+DROP POLICY IF EXISTS assignments_create ON public.assignments;
+DROP POLICY IF EXISTS assignments_read ON public.assignments;
+
+DROP POLICY IF EXISTS submissions_create ON public.submissions;
+DROP POLICY IF EXISTS submissions_read ON public.submissions;
+
+DROP POLICY IF EXISTS session_access_manage ON public.session_access;
+
+DROP POLICY IF EXISTS join_requests_insert ON public.join_requests;
+DROP POLICY IF EXISTS join_requests_admin_read ON public.join_requests;
+DROP POLICY IF EXISTS join_requests_admin_update ON public.join_requests;
+
+DROP POLICY IF EXISTS teacher_bookings_insert ON public.teacher_bookings;
+DROP POLICY IF EXISTS teacher_bookings_select ON public.teacher_bookings;
+DROP POLICY IF EXISTS teacher_bookings_update ON public.teacher_bookings;
+
+DROP POLICY IF EXISTS reminders_insert ON public.reminders;
+DROP POLICY IF EXISTS reminders_read ON public.reminders;
+DROP POLICY IF EXISTS reminders_update ON public.reminders;
+
+DROP POLICY IF EXISTS email_notifications_insert ON public.email_notifications;
+DROP POLICY IF EXISTS email_notifications_read ON public.email_notifications;
+
+DROP POLICY IF EXISTS direct_messages_insert ON public.direct_messages;
+DROP POLICY IF EXISTS direct_messages_read ON public.direct_messages;
+
+DROP POLICY IF EXISTS grades_insert ON public.grades;
+DROP POLICY IF EXISTS grades_read ON public.grades;
+
+DROP POLICY IF EXISTS certificates_insert ON public.certificates;
+DROP POLICY IF EXISTS certificates_read ON public.certificates;
+
+DROP POLICY IF EXISTS session_recordings_insert ON public.session_recordings;
+DROP POLICY IF EXISTS session_recordings_read ON public.session_recordings;
+
+DROP POLICY IF EXISTS scheduled_events_insert ON public.scheduled_events;
+DROP POLICY IF EXISTS scheduled_events_read ON public.scheduled_events;
+
+DROP POLICY IF EXISTS parent_students_insert ON public.parent_students;
+DROP POLICY IF EXISTS parent_students_read ON public.parent_students;
+
+DROP POLICY IF EXISTS announcements_insert ON public.announcements;
+DROP POLICY IF EXISTS announcements_read ON public.announcements;
+DROP POLICY IF EXISTS announcements_update ON public.announcements;
+
+DROP POLICY IF EXISTS teacher_reviews_insert ON public.teacher_reviews;
+DROP POLICY IF EXISTS teacher_reviews_read ON public.teacher_reviews;
+
+DROP POLICY IF EXISTS two_factor_codes_insert ON public.two_factor_codes;
+DROP POLICY IF EXISTS two_factor_codes_read ON public.two_factor_codes;
+
+-- Users can read their own profile or if admin
+CREATE POLICY users_read ON users
+  FOR SELECT USING (auth.uid() = id OR (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+CREATE POLICY users_insert ON users
+  FOR INSERT WITH CHECK (id = auth.uid() AND email = auth.email());
+
+CREATE POLICY users_update ON users
+  FOR UPDATE USING (id = auth.uid());
+
+CREATE POLICY users_public_teacher_read ON users
+  FOR SELECT USING (role = 'teacher' OR role = 'admin');
+
+-- Everyone can read active classroom sessions
+CREATE POLICY sessions_read ON classroom_sessions
+  FOR SELECT USING (true);
+
+-- Teachers can create sessions
+CREATE POLICY sessions_create ON classroom_sessions
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+-- Teachers can update their own sessions
+CREATE POLICY sessions_update ON classroom_sessions
+  FOR UPDATE USING (teacher_id = auth.uid() OR (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+-- Everyone can read chat in their active session
+CREATE POLICY chat_read ON chat_messages
+  FOR SELECT USING (true);
+
+-- Users in a session can insert chat
+CREATE POLICY chat_insert ON chat_messages
+  FOR INSERT WITH CHECK (user_id = auth.uid());
+
+-- Everyone can read attendance
+CREATE POLICY attendance_read ON attendance
+  FOR SELECT USING (true);
+
+-- System (backend) can insert attendance
+CREATE POLICY attendance_insert ON attendance
+  FOR INSERT WITH CHECK (true);
+
+-- Students can read/create questions
+CREATE POLICY questions_read ON questions
+  FOR SELECT USING (true);
+
+CREATE POLICY questions_create ON questions
+  FOR INSERT WITH CHECK (student_id = auth.uid());
+
+-- Teachers can update answers
+CREATE POLICY questions_update ON questions
+  FOR UPDATE USING ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+-- Teachers can create assignments
+CREATE POLICY assignments_create ON assignments
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+-- Everyone can read assignments
+CREATE POLICY assignments_read ON assignments
+  FOR SELECT USING (true);
+
+-- Students can create their own submissions
+CREATE POLICY submissions_create ON submissions
+  FOR INSERT WITH CHECK (student_id = auth.uid());
+
+-- Everyone can read submissions (for feedback)
+CREATE POLICY submissions_read ON submissions
+  FOR SELECT USING (true);
+
+-- Admins can manage session access
+CREATE POLICY session_access_manage ON session_access
+  FOR ALL USING ((SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+-- Join requests from teachers/admins for students to join the platform
+CREATE POLICY join_requests_insert ON join_requests
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+CREATE POLICY join_requests_admin_read ON join_requests
+  FOR SELECT USING ((SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+CREATE POLICY join_requests_admin_update ON join_requests
+  FOR UPDATE USING ((SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+-- Teacher bookings for scheduled lessons
+CREATE POLICY teacher_bookings_insert ON teacher_bookings
+  FOR INSERT WITH CHECK (student_id = auth.uid());
+
+CREATE POLICY teacher_bookings_select ON teacher_bookings
+  FOR SELECT USING (
+    student_id = auth.uid() OR
+    teacher_id = auth.uid() OR
+    (SELECT role FROM users WHERE id = auth.uid()) = 'admin'
+  );
+
+CREATE POLICY teacher_bookings_update ON teacher_bookings
+  FOR UPDATE USING (
+    teacher_id = auth.uid() OR
+    student_id = auth.uid() OR
+    (SELECT role FROM users WHERE id = auth.uid()) = 'admin'
+  );
+
+-- Reminders for students and teachers
+CREATE POLICY reminders_insert ON reminders
+  FOR INSERT WITH CHECK (creator_id = auth.uid());
+
+CREATE POLICY reminders_read ON reminders
+  FOR SELECT USING (target_user_id = auth.uid() OR creator_id = auth.uid());
+
+CREATE POLICY reminders_update ON reminders
+  FOR UPDATE USING (creator_id = auth.uid());
+
+-- Email Notifications (for approval, grade, assignment, etc.)
+CREATE POLICY email_notifications_insert ON email_notifications
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+CREATE POLICY email_notifications_read ON email_notifications
+  FOR SELECT USING (user_id = auth.uid() OR (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+-- Direct Messages (1-on-1 chat)
+CREATE POLICY direct_messages_insert ON direct_messages
+  FOR INSERT WITH CHECK (sender_id = auth.uid());
+
+CREATE POLICY direct_messages_read ON direct_messages
+  FOR SELECT USING (sender_id = auth.uid() OR recipient_id = auth.uid());
+
+-- Student Grades / Performance Records
+CREATE POLICY grades_insert ON grades
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+CREATE POLICY grades_read ON grades
+  FOR SELECT USING (student_id = auth.uid() OR (SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+-- Certificates of Completion
+CREATE POLICY certificates_insert ON certificates
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+CREATE POLICY certificates_read ON certificates
+  FOR SELECT USING (student_id = auth.uid() OR (SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+-- Session Recordings
+CREATE POLICY session_recordings_insert ON session_recordings
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+CREATE POLICY session_recordings_read ON session_recordings
+  FOR SELECT USING (true);
+
+-- Scheduled Events / Calendar
+CREATE POLICY scheduled_events_insert ON scheduled_events
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+CREATE POLICY scheduled_events_read ON scheduled_events
+  FOR SELECT USING (true);
+
+-- Parent-Student Relationships (Parent Portal)
+CREATE POLICY parent_students_insert ON parent_students
+  FOR INSERT WITH CHECK (parent_id = auth.uid() OR (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+CREATE POLICY parent_students_read ON parent_students
+  FOR SELECT USING (parent_id = auth.uid() OR student_id = auth.uid() OR (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+-- Announcement Board
+CREATE POLICY announcements_insert ON announcements
+  FOR INSERT WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'teacher'));
+
+CREATE POLICY announcements_read ON announcements
+  FOR SELECT USING (true);
+
+CREATE POLICY announcements_update ON announcements
+  FOR UPDATE USING (created_by = auth.uid() OR (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+-- Teacher Reviews and Ratings
+CREATE POLICY teacher_reviews_insert ON teacher_reviews
+  FOR INSERT WITH CHECK (student_id = auth.uid());
+
+CREATE POLICY teacher_reviews_read ON teacher_reviews
+  FOR SELECT USING (teacher_id = auth.uid() OR student_id = auth.uid() OR (SELECT role FROM users WHERE id = auth.uid()) = 'admin');
+
+-- Two-factor authentication codes
+CREATE POLICY two_factor_codes_insert ON two_factor_codes
+  FOR INSERT WITH CHECK (user_id = auth.uid());
+
+CREATE POLICY two_factor_codes_read ON two_factor_codes
+  FOR SELECT USING (user_id = auth.uid());
 

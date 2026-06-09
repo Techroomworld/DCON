@@ -40,6 +40,7 @@ export default function AdminDashboard() {
   const [bookings, setBookings] = useState<Array<{ id: string; teacher_name: string; student_name: string; subject: string; topic: string; scheduled_at: string; status: string }>>([]);
   const [events, setEvents] = useState<Array<{ id: string; title: string; event_date: string; event_type: string; room_id: string; description: string | null }>>([]);
   const [articles, setArticles] = useState<Array<{ id: string; title: string; content: string | null; file_url: string | null; created_at: string }>>([]);
+  const [userActionMessage, setUserActionMessage] = useState('');
   const [chatMessages, setChatMessages] = useState<Array<{ id: string; sender_id: string; recipient_id: string; message: string; created_at: string }>>([]);
   const [chatRecipientId, setChatRecipientId] = useState('');
   const [recipientType, setRecipientType] = useState<'student' | 'teacher'>('student');
@@ -220,6 +221,7 @@ export default function AdminDashboard() {
     setAddUserError('');
     setAddUserSuccess('');
     setActionMessage('');
+    setUserActionMessage('');
 
     if (!newUser.email || !newUser.password) {
       setAddUserError('Email and password are required');
@@ -257,9 +259,36 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleDeleteUser = async (userId: string) => {
+    if (!userId) return;
+    setActionMessage('');
+    setUserActionMessage('');
+
+    try {
+      const response = await fetch(`${API_URL}/admin/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setUserActionMessage(data.error || 'Failed to delete user');
+        return;
+      }
+
+      setUserActionMessage('User deleted successfully.');
+      await Promise.all([fetchTeachers(token), fetchStudents()]);
+    } catch (error) {
+      console.error('Failed to delete user:', error);
+      setUserActionMessage('Failed to delete user');
+    }
+  };
+
   const handleCreateMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
     setActionMessage('');
+    setUserActionMessage('');
 
     if (!newMaterial.title) {
       setActionMessage('Material title is required.');
@@ -997,7 +1026,10 @@ export default function AdminDashboard() {
                           <button className="text-blue-600 hover:text-blue-800 font-semibold mr-4">
                             Edit
                           </button>
-                          <button className="text-red-600 hover:text-red-800 font-semibold">
+                          <button
+                            onClick={() => handleDeleteUser(teacher.id)}
+                            className="text-red-600 hover:text-red-800 font-semibold"
+                          >
                             <Trash2 size={16} className="inline" />
                           </button>
                         </td>
@@ -1013,9 +1045,70 @@ export default function AdminDashboard() {
         {/* Students Tab */}
         {activeTab === 'students' && (
           <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-800">Student Management</h2>
-            <div className="bg-white p-6 rounded-lg shadow">
-              <p className="text-gray-600">Student management features coming soon. You can approve pending students in the teacher dashboard.</p>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-800">Student Management</h2>
+                <p className="text-gray-600">View and remove students from the system.</p>
+              </div>
+              <button
+                type="button"
+                onClick={fetchStudents}
+                className="inline-flex items-center gap-2 rounded-3xl bg-blue-600 px-5 py-3 text-white hover:bg-blue-700"
+              >
+                Refresh Students
+              </button>
+            </div>
+            {userActionMessage && (
+              <div className="rounded-3xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-emerald-700">{userActionMessage}</div>
+            )}
+            <div className="overflow-x-auto rounded-3xl bg-white p-6 shadow">
+              <table className="w-full min-w-[640px] text-left">
+                <thead className="bg-gray-100 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-3 text-sm font-semibold text-gray-700">Name</th>
+                    <th className="px-6 py-3 text-sm font-semibold text-gray-700">Email</th>
+                    <th className="px-6 py-3 text-sm font-semibold text-gray-700">Status</th>
+                    <th className="px-6 py-3 text-sm font-semibold text-gray-700">Joined</th>
+                    <th className="px-6 py-3 text-sm font-semibold text-gray-700">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {students.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                        No students created yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    students.map((student) => (
+                      <tr key={student.id} className="border-b border-gray-200 hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm text-gray-900">{student.full_name || 'N/A'}</td>
+                        <td className="px-6 py-4 text-sm text-gray-900">{student.email}</td>
+                        <td className="px-6 py-4 text-sm">
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                            student.can_login
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {student.can_login ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600">
+                          {new Date(student.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          <button
+                            onClick={() => handleDeleteUser(student.id)}
+                            className="text-red-600 hover:text-red-800 font-semibold"
+                          >
+                            <Trash2 size={16} className="inline" /> Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

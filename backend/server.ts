@@ -871,6 +871,62 @@ app.patch('/students/:id/approve', async (req, res) => {
   }
 });
 
+app.post('/students', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || !currentUser.userRow) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    if (!['teacher', 'admin'].includes(currentUser.userRow.role)) {
+      return res.status(403).json({ error: 'Teacher or admin access required' });
+    }
+
+    const { email, password, full_name } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    const { data: authUser, error: authError } = await (supabaseAdmin.auth.admin as any).createUser({
+      email: email.toLowerCase(),
+      password,
+      email_confirm: true,
+    });
+
+    if (authError) {
+      return res.status(400).json({ error: authError.message || 'Failed to create student account' });
+    }
+
+    if (!authUser?.user?.id) {
+      return res.status(500).json({ error: 'Failed to create student account' });
+    }
+
+    const { data: createdStudent, error: profileError } = await supabaseAdmin
+      .from('users')
+      .insert({
+        id: authUser.user.id,
+        email: email.toLowerCase(),
+        role: 'student',
+        full_name: full_name || email.split('@')[0],
+        can_login: true,
+        approved: true,
+      })
+      .select('*')
+      .single();
+
+    if (profileError) {
+      return res.status(500).json({ error: 'Failed to create student profile' });
+    }
+
+    return res.status(201).json({ student: createdStudent });
+  } catch (error) {
+    console.error('create student error', error);
+    return res.status(500).json({ error: 'Unable to create student' });
+  }
+});
+
 app.post('/requests', async (req, res) => {
   try {
     const authHeader = (req.headers.authorization as string) || '';
@@ -1241,6 +1297,44 @@ app.post('/admin/users', async (req, res) => {
   } catch (error) {
     console.error('create user error', error);
     return res.status(500).json({ error: 'Unable to create user' });
+  }
+});
+
+app.delete('/admin/users/:id', async (req, res) => {
+  try {
+    const authHeader = (req.headers.authorization as string) || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.replace('Bearer ', '') : '';
+    const currentUser = await getUserFromToken(token);
+    if (!currentUser || currentUser.userRow?.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const userId = req.params.id;
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+    if (userId === currentUser.authUser.id) {
+      return res.status(400).json({ error: 'Admins cannot delete themselves' });
+    }
+
+    const { error: deleteAuthError } = await (supabaseAdmin.auth.admin as any).deleteUser(userId);
+    if (deleteAuthError) {
+      return res.status(500).json({ error: deleteAuthError.message || 'Unable to delete auth user' });
+    }
+
+    const { error: deleteProfileError } = await supabaseAdmin
+      .from('users')
+      .delete()
+      .eq('id', userId);
+
+    if (deleteProfileError) {
+      return res.status(500).json({ error: deleteProfileError.message || 'Unable to delete user profile' });
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('delete user error', error);
+    return res.status(500).json({ error: 'Unable to delete user' });
   }
 });
 

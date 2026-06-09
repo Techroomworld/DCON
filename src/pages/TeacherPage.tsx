@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import { LogOut, Play, Plus, FileUp, UploadCloud, MessageSquare } from "lucide-react";
+import { LogOut, Play, Plus, FileUp, UploadCloud, MessageSquare, UserPlus } from "lucide-react";
 
 type SessionRecord = {
   id: string;
@@ -46,6 +46,7 @@ export default function TeacherPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingStudents, setPendingStudents] = useState<Array<{ id: string; email: string; full_name?: string; created_at: string }>>([]);
+  const [newStudent, setNewStudent] = useState({ email: '', password: '', full_name: '' });
 
   const API_URL = import.meta.env.VITE_BACKEND_URL || 'https://dcon-1.onrender.com';
 
@@ -172,6 +173,49 @@ export default function TeacherPage() {
       await loadPendingStudents();
     } catch (err) {
       setError('Unable to approve student.');
+    }
+  };
+
+  const handleCreateStudent = async () => {
+    setError(null);
+    setMessage(null);
+
+    if (!newStudent.email.trim() || !newStudent.password.trim()) {
+      setError('Student email and password are required.');
+      return;
+    }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      navigate('/login');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/students`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          email: newStudent.email.trim(),
+          password: newStudent.password,
+          full_name: newStudent.full_name.trim() || newStudent.email.split('@')[0],
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        setError(result.error || 'Unable to create student account.');
+        return;
+      }
+
+      setMessage('Student account created successfully.');
+      setNewStudent({ email: '', password: '', full_name: '' });
+      await loadPendingStudents();
+    } catch (err) {
+      setError('Unable to create student account.');
     }
   };
 
@@ -359,6 +403,54 @@ export default function TeacherPage() {
       <main className="max-w-7xl mx-auto px-6 py-12 space-y-8">
         {message && <div className="rounded-3xl bg-emerald-50 border border-emerald-200 px-4 py-3 text-emerald-700">{message}</div>}
         {error && <div className="rounded-3xl bg-red-50 border border-red-200 px-4 py-3 text-red-700">{error}</div>}
+
+        <section className="rounded-3xl bg-white p-6 shadow">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold text-slate-900">Add a New Student</h2>
+              <p className="text-sm text-slate-500">Teachers can create student accounts directly.</p>
+            </div>
+          </div>
+          <div className="mt-6 grid gap-6 md:grid-cols-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Student name</label>
+              <input
+                value={newStudent.full_name}
+                onChange={(event) => setNewStudent((prev) => ({ ...prev, full_name: event.target.value }))}
+                className="mt-2 w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
+                placeholder="Full name"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Email</label>
+              <input
+                value={newStudent.email}
+                onChange={(event) => setNewStudent((prev) => ({ ...prev, email: event.target.value }))}
+                className="mt-2 w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
+                placeholder="student@example.com"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Password</label>
+              <input
+                type="password"
+                value={newStudent.password}
+                onChange={(event) => setNewStudent((prev) => ({ ...prev, password: event.target.value }))}
+                className="mt-2 w-full rounded-3xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none focus:border-blue-500"
+                placeholder="Temporary password"
+              />
+            </div>
+          </div>
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={handleCreateStudent}
+              className="inline-flex items-center gap-2 rounded-3xl bg-blue-600 px-6 py-3 text-white hover:bg-blue-700"
+            >
+              <span>Add Student</span>
+            </button>
+          </div>
+        </section>
 
         <section className="rounded-3xl bg-white p-6 shadow">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
